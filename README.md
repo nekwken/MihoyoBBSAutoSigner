@@ -1,8 +1,22 @@
 # 米游社自动签到器 · MihoyoBBSAutoSigner
 
-Windows 托盘工具：米游社 / 米哈游游戏辅助自动签到。支持功能开关、定时签到、开机自启、短信登录获取 Stoken。
+<p align="center">
+  <img src="docs/assets/app-icon.png" width="128" alt="MihoyoBBSAutoSigner icon" />
+</p>
 
-> **个人学习与自用。请遵守米哈游用户协议与当地法律。不会自动绕过图形验证/风控。**
+<p align="center">
+  <b>Windows 托盘工具</b> · 米游社 / 米哈游游戏辅助自动签到
+</p>
+
+<p align="center">
+  <img src="docs/assets/readme-hero.png" alt="icon and settings UI" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/ui-settings.png" alt="settings window" width="420" />
+</p>
+
+> **个人学习与自用。请遵守米哈游用户协议与当地法律。不会自动绕过图形验证/风控。非官方项目。**
 
 ## 功能
 
@@ -10,78 +24,79 @@ Windows 托盘工具：米游社 / 米哈游游戏辅助自动签到。支持功
 - 社区打卡 / 米游币（看帖、点赞、分享可选）
 - 游戏签到：原神、星穹铁道、绝区零、崩坏2/3、未定等
 - 社区板块勾选；滚轮调整每日签到时间
-- 短信验证码登录 Stoken（`-3101` 时弹出验证窗口，由用户完成）
-- 自动获取/生成 `device_id` / `device_fp`（仅写日志，不在界面展示）
-- 签到在后台线程执行，状态栏显示「请稍候…」滚动提示
+- 短信验证码登录 Stoken（触发验证时弹出窗口，由用户完成）
+- 自动获取/生成设备标识（仅写日志，不在界面展示）
+- 签到后台执行，状态栏显示「请稍候…」
 
-## 目录结构
+## 下载
 
-```
+请到 [Releases](https://github.com/nekwken/MihoyoBBSAutoSigner/releases) 下载完整包（含编译好的 exe 与引擎）。
+
+解压后运行：
+
+```text
 MihoyoBBSAutoSigner/
-├── TrayApp/                 # 托盘 UI（本仓库主体）
-├── engine/MihoyoBBSTools/   # 签到引擎（本地补丁版，见下）
+├── MihoyoBBSAutoSigner.exe    # 托盘程序
+├── engine/MihoyoBBSTools/     # 签到引擎
 ├── README.md
-├── LICENSE
-└── SECURITY.md
+└── LICENSE
 ```
 
-签到逻辑调用 `engine/MihoyoBBSTools/main.py`（短生命周期子进程）。账号 Cookie / Stoken 写入引擎的 `config/config.yaml`。
+首次使用：
 
-## 快速开始
+1. 将 `engine/MihoyoBBSTools/config/config.yaml.example` 复制为同目录 `config.yaml`
+2. 运行 `MihoyoBBSAutoSigner.exe`
+3. 设置 →「账号 / Stoken」短信登录
+4. 勾选功能与板块 → 保存 → 立即签到 / 等待定时
+
+## 从源码运行
 
 ```powershell
-# 1. 安装依赖
 cd TrayApp
 pip install -r requirements.txt
 pip install -r ../engine/MihoyoBBSTools/requirements.txt
-
-# 2. 准备引擎配置（请勿提交真实 config.yaml）
 copy ..\engine\MihoyoBBSTools\config\config.yaml.example `
      ..\engine\MihoyoBBSTools\config\config.yaml
-
-# 3. 启动
 python main.py
 ```
 
-设置 →「账号 / Stoken」→ 短信登录；勾选功能 → 保存 → 立即签到 / 等待定时。
-
-打包（可选）：
+打包：
 
 ```powershell
 cd TrayApp
 .\build.ps1
 ```
 
-## 相对上游的本地补丁（engine/MihoyoBBSTools）
+## 目录结构
 
-本仓库**不向** [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) 提 PR，仅保留本地修改以便自用与分发：
+```text
+MihoyoBBSAutoSigner/
+├── TrayApp/                 # 托盘 UI
+├── engine/MihoyoBBSTools/   # 签到引擎（本地维护版）
+├── docs/assets/             # README 截图与图标
+├── README.md
+├── LICENSE
+└── SECURITY.md
+```
 
-| 文件 | 变更 |
-|---|---|
-| `setting.py` | 版本对齐 2.114.0；任务列表路径 `apihub/sapi/getUserMissionsState` |
-| `mihoyobbs.py` | 真机请求头；紧凑 JSON + DS2；处理 `1008` 已打卡 |
-| `account.py` | 优先 `getUserGameRolesByStoken` |
-| `main.py` | `RESULT:` 结论日志 + `sys.exit`；修复异常时 `message` 未定义 |
+签到逻辑由 `engine/MihoyoBBSTools/main.py` 在子进程中执行；账号信息写入引擎的 `config/config.yaml`。
 
-协议要点（与真机抓包一致，公开接口）：
+## 引擎说明
 
-- 社区 `signIn`：`DS2` + x6 盐 + body `{"gids":"N"}` 参与签名
-- BBS App 头：`client_type=2`、`x-rpc-verify_key=bll8iq97cem8`、`okhttp/4.9.3`
-- 通行证短信登录走 passport API；图形验证由用户完成
+`engine/MihoyoBBSTools` 基于开源项目 [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools)（MIT）并包含本项目为适配当前客户端所做的本地修改（版本号、接口路径、请求头与结果输出等）。**不向原仓库提交 PR。**
 
 ## 免责声明
 
 1. 仅限用户**自有账号**
-2. **不自动化**极验/风控验证码
+2. **不自动化**图形验证码 / 风控
 3. 不鼓励多开、刷号、商业滥用
-4. 接口变更导致失效属预期；本项目不提供对抗服务端风控的指导
+4. 接口变更导致失效属预期
 5. **非米哈游官方项目**；使用风险自负
 
 ## 致谢
 
-- [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) — 签到引擎（MIT）
-- 公开米游社 / 米哈游通行证协议整理文档作者
+- [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) — 开源签到引擎（MIT）
 
 ## License
 
-MIT，见 [LICENSE](LICENSE)。使用上游引擎时请一并保留其版权声明。
+MIT，见 [LICENSE](LICENSE)。
