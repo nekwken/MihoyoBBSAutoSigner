@@ -34,7 +34,7 @@ MihoyoBBSAutoSigner {APP_VERSION}
 米游社 / 米哈游游戏辅助签到托盘
 功能：社区打卡 · 游戏签到 · 定时任务 · 开机自启 · 短信登录 Stoken
 
-签到引擎：Womsxd/MihoyoBBSTools（本地补丁，不提 PR）
+签到引擎：Womsxd/MihoyoBBSTools
 协议参考：公开米游社/通行证接口整理
 
 设备 device_id / device_fp 自动生成，详见日志文件。
