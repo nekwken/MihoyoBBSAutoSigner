@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import json
+import sys
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+APP_NAME = "MihoyoBBSAutoSigner"
+APP_TITLE = "米游社自动签到器"
+APP_VERSION = "1.1.0"
+
+
+def _exe_or_file_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+def app_home() -> Path:
+    d = _exe_or_file_dir()
+    if d.name.lower() == "dist" and d.parent.exists():
+        return d.parent
+    return d
+
+
+def find_bbs_root() -> Path:
+    starts = [_exe_or_file_dir(), app_home()]
+    seen: set[Path] = set()
+    for start in starts:
+        cur = start
+        for _ in range(6):
+            if cur in seen:
+                break
+            seen.add(cur)
+            candidate = cur / "MihoyoBBSTools"
+            if (candidate / "main.py").exists() and (candidate / "config").exists():
+                return candidate
+            if (
+                cur.name == "MihoyoBBSTools"
+                and (cur / "main.py").exists()
+                and (cur / "config").exists()
+            ):
+                return cur
+            if cur.parent == cur:
+                break
+            cur = cur.parent
+    return app_home().parent / "MihoyoBBSTools"
+
+
+HOME = app_home()
+BBS_ROOT = find_bbs_root()
+CONFIG_PATH = HOME / "tray_config.json"
+LOG_PATH = HOME / "tray.log"
+ICON_PATH = HOME / "assets" / "icon.ico"
+
+BBS_BOARDS = {
+    1: "崩坏3",
+    2: "原神",
+    3: "崩坏2",
+    4: "未定事件簿",
+    5: "大别野",
+    6: "崩坏：星穹铁道",
+    8: "绝区零",
+    9: "因缘精灵",
+    10: "星布谷地",
+}
+
+DEFAULT = {
+    "autostart": False,
+    "run_on_launch": False,
+    "minimize_to_tray": True,
+    "schedule_enabled": True,
+    "schedule_times": ["09:30"],
+    "random_delay_sec": 120,
+    "enable_bbs": True,
+    "enable_honkai_sr": True,
+    "enable_zzz": True,
+    "enable_genshin": False,
+    "enable_honkai3rd": False,
+    "enable_honkai2": False,
+    "enable_tears": False,
+    "checkin_list": [2, 6, 8],
+    "bbs_read": True,
+    "bbs_like": False,
+    "bbs_share": False,
+    "device_id": "",
+    "device_fp": "",
+    "last_run": "",
+    "last_status": "",
+}
+
+
+@dataclass
+class TrayConfig:
+    autostart: bool = False
+    run_on_launch: bool = False
+    minimize_to_tray: bool = True
+    schedule_enabled: bool = True
+    schedule_times: list[str] = field(default_factory=lambda: ["09:30"])
+    random_delay_sec: int = 120
+    enable_bbs: bool = True
+    enable_honkai_sr: bool = True
+    enable_zzz: bool = True
+    enable_genshin: bool = False
+    enable_honkai3rd: bool = False
+    enable_honkai2: bool = False
+    enable_tears: bool = False
+    checkin_list: list[int] = field(default_factory=lambda: [2, 6, 8])
+    bbs_read: bool = True
+    bbs_like: bool = False
+    bbs_share: bool = False
+    device_id: str = ""
+    device_fp: str = ""
+    last_run: str = ""
+    last_status: str = ""
+
+    @classmethod
+    def load(cls) -> "TrayConfig":
+        data = dict(DEFAULT)
+        if CONFIG_PATH.exists():
+            try:
+                data.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+        known = set(cls.__dataclass_fields__)
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+    def save(self) -> None:
+        CONFIG_PATH.write_text(
+            json.dumps(asdict(self), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def feature_enabled(self) -> bool:
+        return any(
+            [
+                self.enable_bbs,
+                self.enable_honkai_sr,
+                self.enable_zzz,
+                self.enable_genshin,
+                self.enable_honkai3rd,
+                self.enable_honkai2,
+                self.enable_tears,
+            ]
+        )

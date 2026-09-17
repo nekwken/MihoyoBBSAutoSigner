@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.spec
+tray_config.json
+tray.log
+assets/icon.png
+.idea/
+.vscode/
+*.har
+private_*.json
+config.yaml
+!config/config.yaml.example
