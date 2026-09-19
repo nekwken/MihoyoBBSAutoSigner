@@ -352,11 +352,7 @@ class SettingsWindow:
         self.var_min_tray = tk.BooleanVar(value=bool(self.cfg.minimize_to_tray))
         ttk.Checkbutton(wrap, text="开机自启动（当前用户）", variable=self.var_autostart).pack(anchor="w")
         ttk.Checkbutton(wrap, text="启动本程序后立即签到一次", variable=self.var_launch_run).pack(anchor="w")
-        ttk.Checkbutton(
-            wrap,
-            text="静默启动（开启后启动 / 自启 / 重复点击图标只进托盘，不打开设置页）",
-            variable=self.var_silent,
-        ).pack(anchor="w")
+        ttk.Checkbutton(wrap, text="静默启动", variable=self.var_silent).pack(anchor="w")
         ttk.Checkbutton(
             wrap,
             text="关闭窗口时最小化到托盘（不勾选则直接退出程序）",
