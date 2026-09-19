@@ -16,3 +16,4 @@ private_*.json
 assets/icon_source.png
 release/
 dist/
+show_request.flag

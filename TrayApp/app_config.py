@@ -65,6 +65,7 @@ BOARD_ROWS = [
 DEFAULT = {
     "autostart": False,
     "run_on_launch": False,
+    "silent_launch": False,
     "minimize_to_tray": True,
     "schedule_enabled": True,
     "schedule_times": ["09:30"],
@@ -91,6 +92,7 @@ DEFAULT = {
 class TrayConfig:
     autostart: bool = False
     run_on_launch: bool = False
+    silent_launch: bool = False
     minimize_to_tray: bool = True
     schedule_enabled: bool = True
     schedule_times: list[str] = field(default_factory=lambda: ["09:30"])

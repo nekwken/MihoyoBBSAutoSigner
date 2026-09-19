@@ -8,12 +8,14 @@ import pystray
 from PIL import Image
 
 import autostart
-from app_config import APP_NAME, APP_TITLE, TrayConfig
+from app_config import APP_NAME, APP_TITLE, HOME, TrayConfig
 from device_identity import ensure_device
 from make_icon import ensure_icon
 from runner import run_checkin
 from scheduler import Scheduler, next_run_time
 from settings_ui import SettingsWindow
+
+SHOW_FLAG = HOME / "show_request.flag"
 
 
 class TrayApp:
@@ -156,6 +158,15 @@ class TrayApp:
         except Exception:
             pass
 
+    def _consume_show_request(self) -> bool:
+        try:
+            if SHOW_FLAG.exists():
+                SHOW_FLAG.unlink()
+                return not self.cfg.silent_launch
+        except Exception:
+            pass
+        return False
+
     def _pump(self) -> None:
         if self._want_quit:
             try:
@@ -168,6 +179,8 @@ class TrayApp:
             except Exception:
                 pass
             return
+        if self._consume_show_request():
+            self._want_settings = True
         if self._want_settings:
             self._want_settings = False
             try:
@@ -203,6 +216,8 @@ class TrayApp:
         self._tray_thread.start()
         if self.cfg.run_on_launch:
             threading.Thread(target=self._run_async, daemon=True).start()
+        if not self.cfg.silent_launch:
+            self._want_settings = True
         self.root.after(150, self._pump)
         self.root.mainloop()
 

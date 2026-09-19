@@ -115,7 +115,23 @@ class SettingsWindow:
         self.var_hour = tk.StringVar(value="09")
         self.var_minute = tk.StringVar(value="30")
         self._build()
+        self._fit_default_geometry()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _fit_default_geometry(self) -> None:
+        """默认窗口以能完整显示功能页内容为准（超出屏幕时才需要滚动）。"""
+        try:
+            self.root.update_idletasks()
+            inner = getattr(self, "_feat_inner", None)
+            if inner is None:
+                return
+            content_h = inner.winfo_reqheight() + 180
+            screen_h = self.root.winfo_screenheight()
+            h = min(max(760, content_h), screen_h - 120)
+            w = max(680, inner.winfo_reqwidth() + 60)
+            self.root.geometry(f"{w}x{h}")
+        except Exception:
+            pass
 
     @staticmethod
     def _apply_window_icon(win: tk.Misc) -> None:
@@ -208,6 +224,8 @@ class SettingsWindow:
         canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
         canvas.bind("<Button-4>", lambda _e: canvas.yview_scroll(-1, "units"))
         canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(1, "units"))
+        if parent is self.tab_feat:
+            self._feat_inner = inner
         return inner
 
     def _build_features(self, parent: tk.Frame) -> None:
@@ -330,9 +348,15 @@ class SettingsWindow:
         ttk.Label(wrap, text="启动 / 关闭", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_autostart = tk.BooleanVar(value=autostart.is_enabled())
         self.var_launch_run = tk.BooleanVar(value=self.cfg.run_on_launch)
+        self.var_silent = tk.BooleanVar(value=bool(self.cfg.silent_launch))
         self.var_min_tray = tk.BooleanVar(value=bool(self.cfg.minimize_to_tray))
         ttk.Checkbutton(wrap, text="开机自启动（当前用户）", variable=self.var_autostart).pack(anchor="w")
         ttk.Checkbutton(wrap, text="启动本程序后立即签到一次", variable=self.var_launch_run).pack(anchor="w")
+        ttk.Checkbutton(
+            wrap,
+            text="静默启动（开启后启动 / 自启 / 重复点击图标只进托盘，不打开设置页）",
+            variable=self.var_silent,
+        ).pack(anchor="w")
         ttk.Checkbutton(
             wrap,
             text="关闭窗口时最小化到托盘（不勾选则直接退出程序）",
@@ -672,6 +696,7 @@ class SettingsWindow:
         cfg.random_delay_sec = delay
         cfg.autostart = self.var_autostart.get()
         cfg.run_on_launch = self.var_launch_run.get()
+        cfg.silent_launch = self.var_silent.get()
         cfg.minimize_to_tray = self.var_min_tray.get()
         ensure_device(cfg)
         return cfg
