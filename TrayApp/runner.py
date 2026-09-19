@@ -176,8 +176,6 @@ def apply_features(cfg: TrayConfig) -> Path:
     data["mihoyobbs"]["checkin"] = bool(cfg.enable_bbs)
     data["mihoyobbs"]["checkin_list"] = list(cfg.checkin_list)
     data["mihoyobbs"]["read"] = bool(cfg.bbs_read)
-    data["mihoyobbs"]["like"] = bool(cfg.bbs_like)
-    data["mihoyobbs"]["share"] = bool(cfg.bbs_share)
 
     device = data.setdefault("device", {})
     device["id"] = cfg.device_id

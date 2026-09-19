@@ -79,8 +79,6 @@ DEFAULT = {
     "enable_tears": False,
     "checkin_list": [2, 6, 8],
     "bbs_read": True,
-    "bbs_like": False,
-    "bbs_share": False,
     "device_id": "",
     "device_fp": "",
     "last_run": "",
@@ -106,8 +104,6 @@ class TrayConfig:
     enable_tears: bool = False
     checkin_list: list[int] = field(default_factory=lambda: [2, 6, 8])
     bbs_read: bool = True
-    bbs_like: bool = False
-    bbs_share: bool = False
     device_id: str = ""
     device_fp: str = ""
     last_run: str = ""

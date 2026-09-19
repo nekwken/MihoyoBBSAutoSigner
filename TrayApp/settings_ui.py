@@ -282,19 +282,13 @@ class SettingsWindow:
         tasks = tk.Frame(wrap, bg=PANEL)
         tasks.pack(fill="x")
         self.var_read = tk.BooleanVar(value=self.cfg.bbs_read)
-        self.var_like = tk.BooleanVar(value=self.cfg.bbs_like)
-        self.var_share = tk.BooleanVar(value=self.cfg.bbs_share)
-        self._task_cbs = [
-            ttk.Checkbutton(tasks, text="看帖", variable=self.var_read),
-            ttk.Checkbutton(tasks, text="点赞", variable=self.var_like),
-            ttk.Checkbutton(tasks, text="分享", variable=self.var_share),
-        ]
+        self._task_cbs = [ttk.Checkbutton(tasks, text="看帖", variable=self.var_read)]
         for cb in self._task_cbs:
             cb.pack(side="left", padx=(0, 14))
         self._sync_task_state()
         ttk.Label(
             wrap,
-            text="当前米游币来源为社区打卡 + 看帖；点赞 / 分享已不计米游币，仅供保留互动。",
+            text="米游币由社区打卡获得；看帖奖励需在 App 内浏览 3 个不同帖子，API 看帖暂不计币。",
             style="Muted.TLabel",
             wraplength=420,
             justify="left",
@@ -626,12 +620,10 @@ class SettingsWindow:
             messagebox.showwarning("Stoken", res.message)
 
     def _sync_task_state(self) -> None:
-        """未选任何社区板块时，米游币任务无意义：强制关闭并禁用勾选。"""
+        """未选任何社区板块时，看帖任务无意义：强制关闭并禁用勾选。"""
         any_board = any(var.get() for var in self._board_vars.values())
         if not any_board:
             self.var_read.set(False)
-            self.var_like.set(False)
-            self.var_share.set(False)
         state = "normal" if any_board else "disabled"
         for cb in self._task_cbs:
             try:
@@ -660,8 +652,8 @@ class SettingsWindow:
         if not any_board and not any_game:
             messagebox.showerror("设置", "请至少勾选一项：游戏签到或社区打卡")
             return None
-        if (self.var_read.get() or self.var_like.get() or self.var_share.get()) and not any_board:
-            messagebox.showerror("设置", "米游币任务需要至少勾选一个社区打卡板块")
+        if self.var_read.get() and not any_board:
+            messagebox.showerror("设置", "看帖任务需要至少勾选一个社区打卡板块")
             return None
         times = self._collect_times()
         if times is None:
@@ -684,8 +676,6 @@ class SettingsWindow:
         cfg.enable_honkai_sr = self._game_vars["honkai_sr"].get()
         cfg.enable_zzz = self._game_vars["zzz"].get()
         cfg.bbs_read = self.var_read.get()
-        cfg.bbs_like = self.var_like.get()
-        cfg.bbs_share = self.var_share.get()
         cfg.checkin_list = sorted(boards)
         cfg.schedule_enabled = self.var_sched.get()
         cfg.schedule_times = times
