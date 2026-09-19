@@ -1,9 +1,0 @@
-米游社自动签到器 MihoyoBBSAutoSigner
-====================================
-1. 将 engine\MihoyoBBSTools\config\config.yaml.example 复制为 config.yaml
-2. 双击 MihoyoBBSAutoSigner.exe
-3. 托盘图标 → 打开设置 → 账号/Stoken → 短信登录
-4. 在「游戏签到 · 社区打卡」表中勾选 → 保存 → 立即签到
-
-说明：非官方工具，仅供个人学习自用；不会自动绕过图形验证。
-配置文件勿提交到公开仓库。
