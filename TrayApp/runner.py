@@ -177,9 +177,10 @@ def apply_features(cfg: TrayConfig) -> Path:
     data["mihoyobbs"]["checkin_list"] = list(cfg.checkin_list)
 
     cloud = data.setdefault("cloud_games", {}).setdefault("cn", {})
-    cloud["enable"] = bool(cfg.cloud_genshin or cfg.cloud_zzz)
+    cloud["enable"] = bool(cfg.cloud_genshin or cfg.cloud_zzz or cfg.cloud_sr)
     for key, flag, token_field in (("genshin", cfg.cloud_genshin, "cloud_genshin_token"),
-                                   ("zzz", cfg.cloud_zzz, "cloud_zzz_token")):
+                                   ("zzz", cfg.cloud_zzz, "cloud_zzz_token"),
+                                   ("honkai_sr", cfg.cloud_sr, "cloud_sr_token")):
         node = cloud.setdefault(key, {"enable": False, "token": ""})
         node["enable"] = bool(flag)
         token = str(getattr(cfg, token_field) or "").strip()
@@ -383,6 +384,7 @@ def get_cloud_tokens() -> dict:
         return {
             "genshin": str((cn.get("genshin") or {}).get("token") or ""),
             "zzz": str((cn.get("zzz") or {}).get("token") or ""),
+            "sr": str((cn.get("honkai_sr") or {}).get("token") or ""),
         }
     except Exception:
         return {}

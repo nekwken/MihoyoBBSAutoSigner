@@ -35,7 +35,8 @@ config = {
         "cn": {
             "enable": False,
             "genshin": {'enable': False, 'token': ""},
-            "zzz": {'enable': False, 'token': ""}
+            "zzz": {'enable': False, 'token': ""},
+            "honkai_sr": {'enable': False, 'token': ""}
         },
     }
 }

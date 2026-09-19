@@ -372,8 +372,7 @@ def write_bbs_config(res: StokenResult, web_cookie: str | None = None):
     return path
 
 
-# ---- 云游戏 token 自动获取（stoken 自扫云游戏网页登录二维码）----
-# 协议详见 E:/抢码工具/mihoyo-protocol/10-miyoubbs-tasks.md、11-behavior-log.md
+# ---- 云游戏 token 自动获取 ----
 
 _CG_SALT_PROD = "JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS"
 _PP = "https://passport-api.mihoyo.com"

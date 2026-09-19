@@ -107,7 +107,6 @@ class SettingsWindow:
         self._apply_window_icon(self.root)
         self.root.geometry("660x780")
         self.root.minsize(560, 620)
-        self.root.resizable(True, True)
         self.root.configure(bg=PANEL)
         self.root.attributes("-topmost", True)
         self.root.withdraw()
@@ -130,6 +129,7 @@ class SettingsWindow:
             h = min(max(760, content_h), screen_h - 120)
             w = max(680, inner.winfo_reqwidth() + 60)
             self.root.geometry(f"{w}x{h}")
+            self.root.resizable(False, False)
         except Exception:
             pass
 
@@ -282,26 +282,24 @@ class SettingsWindow:
         cloud = tk.Frame(wrap, bg=PANEL)
         cloud.pack(fill="x")
         ttk.Label(cloud, text="云原神").grid(row=0, column=0, sticky="w", pady=2)
-        ttk.Label(cloud, text="云绝区零").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(cloud, text="云星穹铁道").grid(row=1, column=0, sticky="w", pady=2)
+        ttk.Label(cloud, text="云绝区零").grid(row=2, column=0, sticky="w", pady=2)
         self.var_cloud_genshin = tk.BooleanVar(value=self.cfg.cloud_genshin)
+        self.var_cloud_sr = tk.BooleanVar(value=self.cfg.cloud_sr)
         self.var_cloud_zzz = tk.BooleanVar(value=self.cfg.cloud_zzz)
         ttk.Checkbutton(cloud, variable=self.var_cloud_genshin).grid(row=0, column=1, sticky="w")
-        ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=1, column=1, sticky="w")
+        ttk.Checkbutton(cloud, variable=self.var_cloud_sr).grid(row=1, column=1, sticky="w")
+        ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=2, column=1, sticky="w")
         self.ent_cloud_genshin = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
+        self.ent_cloud_sr = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
         self.ent_cloud_zzz = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
         self.ent_cloud_genshin.grid(row=0, column=2, sticky="we", padx=(6, 0))
-        self.ent_cloud_zzz.grid(row=1, column=2, sticky="we", padx=(6, 0))
+        self.ent_cloud_sr.grid(row=1, column=2, sticky="we", padx=(6, 0))
+        self.ent_cloud_zzz.grid(row=2, column=2, sticky="we", padx=(6, 0))
         existing_tokens = get_cloud_tokens()
         self.ent_cloud_genshin.insert(0, existing_tokens.get("genshin", ""))
+        self.ent_cloud_sr.insert(0, existing_tokens.get("sr", ""))
         self.ent_cloud_zzz.insert(0, existing_tokens.get("zzz", ""))
-        ttk.Label(
-            wrap,
-            text="米游币当前仅由社区打卡发放（30 起、连续 40）；看帖/点赞/分享奖励已下线。\n"
-                 "云游戏 token：云游戏 App 抓包请求头 x-rpc-combo_token。",
-            style="Muted.TLabel",
-            wraplength=460,
-            justify="left",
-        ).pack(anchor="w", pady=(2, 0))
 
         ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)
@@ -689,8 +687,10 @@ class SettingsWindow:
         cfg.checkin_list = sorted(boards)
         cfg.cloud_genshin = self.var_cloud_genshin.get()
         cfg.cloud_zzz = self.var_cloud_zzz.get()
+        cfg.cloud_sr = self.var_cloud_sr.get()
         cfg.cloud_genshin_token = self.ent_cloud_genshin.get().strip()
         cfg.cloud_zzz_token = self.ent_cloud_zzz.get().strip()
+        cfg.cloud_sr_token = self.ent_cloud_sr.get().strip()
         cfg.schedule_enabled = self.var_sched.get()
         cfg.schedule_times = times
         cfg.random_delay_sec = delay

@@ -50,3 +50,6 @@ cloud_games:
     zzz:
       enable: false
       token: ''
+    honkai_sr:
+      enable: false
+      token: ''
