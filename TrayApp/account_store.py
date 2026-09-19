@@ -73,9 +73,22 @@ def logout_and_clear(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     acc["stoken"] = ""
     acc["mid"] = ""
 
+    cloud = data.setdefault("cloud_games", {}).setdefault("cn", {})
+    cloud["enable"] = False
+    for node in ("genshin", "zzz", "honkai_sr"):
+        item = cloud.setdefault(node, {"enable": False, "token": ""})
+        item["enable"] = False
+        item["token"] = ""
+
     if cfg is not None:
         cfg.device_id = ""
         cfg.device_fp = ""
+        cfg.cloud_genshin = False
+        cfg.cloud_sr = False
+        cfg.cloud_zzz = False
+        cfg.cloud_genshin_token = ""
+        cfg.cloud_sr_token = ""
+        cfg.cloud_zzz_token = ""
         try:
             ensure_device(cfg)
         except Exception:
@@ -99,5 +112,5 @@ def logout_and_clear(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     except Exception:
         pass
 
-    _log("已退出登录并清除账号数据与运行日志")
-    return True, "已退出登录，账号数据与运行日志已清除"
+    _log("已退出登录并清除账号数据、云游戏凭证与运行日志")
+    return True, "已退出登录，账号数据、云游戏凭证与运行日志已清除"

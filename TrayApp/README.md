@@ -12,7 +12,7 @@
 - 社区板块勾选
 - 定时签到（滚轮调整时间 + 随机延迟）
 - 开机自启动
-- 短信验证码获取 Stoken（触发 `-3101` 时弹出验证窗口，由用户完成）
+- 短信验证码登录（触发 `-3101` 时弹出验证窗口，由用户完成）
 - 自动获取/生成 `device_id` / `device_fp`（仅写日志，不在界面展示）
 
 ## 架构
@@ -22,7 +22,7 @@ MihoyoBBSTray (托盘 UI / 调度)
     └── 调用 ../MihoyoBBSTools/main.py （短生命周期子进程）
 ```
 
-账号 Cookie / Stoken 写入 `MihoyoBBSTools/config/config.yaml`。
+账号登录凭证写入 `MihoyoBBSTools/config/config.yaml`，云游戏凭证在签到时自动刷新。
 
 ## 快速开始
 
@@ -36,7 +36,7 @@ python main.py
 ```
 
 1. 复制 `MihoyoBBSTools/config/config.yaml.example` 为 `config.yaml`
-2. 启动托盘 → 设置 →「账号 / Stoken」短信登录
+2. 启动托盘 → 设置 →「账号」页短信登录
 3. 勾选功能与板块 → 保存 → 立即签到 / 等待定时
 
 ## 打包

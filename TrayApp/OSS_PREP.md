@@ -24,7 +24,7 @@
 
 - [ ] `CONTRIBUTING.md`（可选）
 - [ ] `SECURITY.md`：不处理“绕过验证码/风控”类 issue
-- [ ] Issue 模板：禁止粘贴 Cookie/Stoken
+- [ ] Issue 模板：禁止粘贴账号凭证
 - [ ] CI：`python -m compileall TrayApp` + 可选 ruff
 - [ ] Release 说明：仅分发源码或自建 exe；注明非官方
 - [ ] 上游致谢：MihoyoBBSTools、协议文档来源

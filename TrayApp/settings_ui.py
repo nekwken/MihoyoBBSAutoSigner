@@ -19,7 +19,7 @@ from app_config import (
 from make_icon import ensure_icon
 from account_store import format_account_status, load_account_info, logout_and_clear
 from device_identity import ensure_device
-from runner import get_cloud_tokens, read_log_tail, run_checkin
+from runner import read_log_tail, run_checkin
 from scheduler import parse_hhmm
 from stoken_login import (
     StokenResult,
@@ -38,10 +38,10 @@ ABOUT_TEXT = f"""米游社自动签到器
 MihoyoBBSAutoSigner {APP_VERSION}
 
 米游社 / 米哈游游戏辅助签到托盘
-功能：社区打卡 · 游戏签到 · 定时任务 · 开机自启 · 短信登录 Stoken
+功能：社区打卡 · 游戏签到 · 云游戏签到 · 定时任务 · 开机自启 · 短信登录
 
 签到引擎：Womsxd/MihoyoBBSTools
-协议参考：公开米游社/通行证接口整理
+接口与错误码参考社区公开整理
 
 图形验证仅弹窗由用户完成，不会自动绕过极验。
 
@@ -289,12 +289,6 @@ class SettingsWindow:
         ttk.Checkbutton(cloud, variable=self.var_cloud_genshin).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(cloud, variable=self.var_cloud_sr).grid(row=1, column=1, sticky="w")
         ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=2, column=1, sticky="w")
-        self._cloud_token_status = {}
-        for i, key in enumerate(("genshin", "sr", "zzz")):
-            lab = tk.Label(cloud, bg=PANEL, fg=MUTED, font=("Segoe UI", 9))
-            lab.grid(row=i, column=2, sticky="w", padx=(6, 0))
-            self._cloud_token_status[key] = lab
-        self._refresh_cloud_token_status()
 
         ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)
@@ -394,7 +388,7 @@ class SettingsWindow:
         wrap.pack(fill="both", expand=True, padx=8, pady=6)
         ttk.Label(
             wrap,
-            text="短信验证码登录获取 Stoken；若触发图形验证会弹出窗口，请手动完成",
+            text="短信验证码登录；云游戏凭证在签到时自动获取。若触发图形验证会弹出窗口，请手动完成",
             style="Muted.TLabel",
             wraplength=420,
             justify="left",
@@ -548,7 +542,7 @@ class SettingsWindow:
             return
         mobile = self.ent_account.get().strip()
         if not mobile:
-            messagebox.showerror("Stoken", "请先填写手机号")
+            messagebox.showerror("签到账号", "请先填写手机号")
             return
         did, fp = self._device()
         self._login_busy = True
@@ -567,7 +561,7 @@ class SettingsWindow:
         mobile = self.ent_account.get().strip()
         code = self.ent_sms.get().strip()
         if not mobile or not code:
-            messagebox.showerror("Stoken", "请填写手机号和短信验证码")
+            messagebox.showerror("签到账号", "请填写手机号和短信验证码")
             return
         did, fp = self._device()
         self._login_busy = True
@@ -588,30 +582,6 @@ class SettingsWindow:
                 except Exception as e:
                     res.message += f"；写入配置失败：{e}"
                     res.ok = False
-                try:
-                    from stoken_login import acquire_cloud_token, write_cloud_token
-                    import yaml
-                    from app_config import BBS_ROOT
-                    labels = {"genshin": "云原神", "sr": "云星穹铁道", "zzz": "云绝区零"}
-                    cfgp = BBS_ROOT / "config" / "config.yaml"
-                    data = yaml.safe_load(cfgp.read_text(encoding="utf-8")) or {}
-                    got, failed = [], []
-                    for game, label in labels.items():
-                        okc, msgc = acquire_cloud_token(game, res.stoken, res.mid, res.stuid)
-                        if okc:
-                            write_cloud_token(data, game, msgc)
-                            got.append(label)
-                        else:
-                            failed.append(f"{label}（{msgc}）")
-                    if got:
-                        cfgp.write_text(
-                            yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
-                            encoding="utf-8")
-                        res.message += "；云游戏已获取：" + "、".join(got)
-                    if failed:
-                        res.message += "；云游戏获取失败：" + "；".join(failed)
-                except Exception as e:
-                    res.message += f"；云游戏 token 获取异常：{e}"
             self._post_ui(lambda: self._login_done(res))
 
         threading.Thread(target=work, daemon=True).start()
@@ -622,28 +592,27 @@ class SettingsWindow:
         self._refresh_account_status()
         if res.ok:
             self._start_sms_cooldown(res.sms_countdown or 60)
-            messagebox.showinfo("Stoken", res.message)
+            messagebox.showinfo("签到账号", res.message)
         else:
             self._clear_sms_cooldown()
             if "图形验证" in (res.message or ""):
                 self.login_var.set(res.message + "（未进入倒计时，可立即重试）")
-            messagebox.showwarning("Stoken", res.message)
+            messagebox.showwarning("签到账号", res.message)
 
     def _login_done(self, res: StokenResult) -> None:
         self._login_busy = False
         self.login_var.set(res.message)
         self._refresh_account_status()
-        self._refresh_cloud_token_status()
         if res.ok:
-            messagebox.showinfo("Stoken", res.message + "\n已写入签到配置")
+            messagebox.showinfo("签到账号", res.message + "\n已写入签到配置")
         else:
-            messagebox.showwarning("Stoken", res.message)
+            messagebox.showwarning("签到账号", res.message)
 
     def _collect_times(self) -> list[str] | None:
         return [f"{self.var_hour.get().zfill(2)}:{self.var_minute.get().zfill(2)}"]
 
     def _logout(self) -> None:
-        if not messagebox.askyesno("退出登录", "确定退出登录并清除 Cookie / Stoken 数据？"):
+        if not messagebox.askyesno("退出登录", "确定退出登录并清除账号数据与云游戏凭证？"):
             return
         ok, msg = logout_and_clear(self.cfg)
         self._refresh_account_status()
@@ -652,16 +621,6 @@ class SettingsWindow:
             messagebox.showinfo("退出登录", msg)
         else:
             messagebox.showerror("退出登录", msg)
-
-    def _refresh_cloud_token_status(self, tokens: dict | None = None) -> None:
-        tokens = tokens if tokens is not None else get_cloud_tokens()
-        labels = {"genshin": "云原神", "sr": "云星穹铁道", "zzz": "云绝区零"}
-        for key, lab in self._cloud_token_status.items():
-            state = "已配置" if tokens.get(key) else "未配置"
-            try:
-                lab.configure(text=state)
-            except Exception:
-                pass
 
     def _collect(self) -> TrayConfig | None:
         boards = [gid for gid, var in self._board_vars.items() if var.get()]

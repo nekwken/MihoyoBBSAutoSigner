@@ -250,9 +250,9 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
             if "验证码" in detail:
                 return False, "签到触发验证码，请手动处理"
             if "Cookie" in detail:
-                return False, "未登录或 Cookie 无效，请在账号页短信登录"
+                return False, "未登录或登录状态失效，请在账号页重新登录"
             if "Stoken" in detail:
-                return False, "未登录或 Stoken 无效，请在账号页短信登录"
+                return False, "登录状态无效，请在账号页重新登录"
             return False, detail[:80] if detail else "签到失败，请查看日志"
 
     fail_hit = next((m for m in FAIL_MARKERS if m in text), "")
@@ -260,9 +260,9 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
 
     if fail_hit:
         if "Cookies" in fail_hit or "Cookie" in fail_hit or "UID" in fail_hit:
-            msg = "未登录或 Cookie/UID 不完整，请在账号页重新短信登录"
+            msg = "未登录或账号信息不完整，请在账号页重新登录"
         elif "Stoken" in fail_hit:
-            msg = "未登录或 Stoken 无效，请在账号页短信登录"
+            msg = "登录状态无效，请在账号页重新登录"
         elif "Traceback" in fail_hit or "UnboundLocal" in fail_hit:
             msg = "签到引擎异常退出，请查看日志"
         else:
@@ -287,6 +287,55 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
     return False, "签到结果不明确，请查看日志"
 
 
+def refresh_cloud_tokens(cfg: TrayConfig) -> list[str]:
+    """签到时按需刷新勾选的云游戏凭证，返回提示信息列表（失败不阻断签到）。"""
+    notes: list[str] = []
+    if not (cfg.cloud_genshin or cfg.cloud_sr or cfg.cloud_zzz):
+        return notes
+    path = _bbs_config_path()
+    if not path.exists() or yaml is None:
+        return ["云游戏凭证未刷新：未找到签到配置"]
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        return [f"云游戏凭证未刷新：{e}"]
+    acc = data.get("account") or {}
+    stoken = str(acc.get("stoken") or "").strip()
+    mid = str(acc.get("mid") or "").strip()
+    stuid = str(acc.get("stuid") or "").strip()
+    if not (stoken and mid and stuid):
+        return ["云游戏凭证未刷新：账号信息不完整"]
+
+    from stoken_login import acquire_cloud_token, write_cloud_token
+
+    changed = False
+    for game, label, on in (("genshin", "云原神", cfg.cloud_genshin),
+                            ("sr", "云星穹铁道", cfg.cloud_sr),
+                            ("zzz", "云绝区零", cfg.cloud_zzz)):
+        if not on:
+            continue
+        try:
+            ok, msg = acquire_cloud_token(game, stoken, mid, stuid)
+        except Exception as e:
+            notes.append(f"{label}凭证刷新异常：{e}")
+            continue
+        if ok:
+            write_cloud_token(data, game, msg)
+            changed = True
+            _log(f"{label}凭证已刷新")
+        else:
+            notes.append(f"{label}凭证刷新失败：{msg}")
+
+    if changed:
+        try:
+            path.write_text(
+                yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                encoding="utf-8")
+        except Exception as e:
+            notes.append(f"云游戏凭证写入失败：{e}")
+    return notes
+
+
 def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     cfg = cfg or TrayConfig.load()
     if not cfg.feature_enabled():
@@ -303,7 +352,7 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
         f"stoken_set={snap.get('stoken_set')} cookie_has_uid={snap.get('cookie_has_uid')}"
     )
     if not snap.get("logged_in"):
-        msg = "未登录，请先在「账号 / Stoken」短信登录"
+        msg = "未登录，请先在「账号」页短信登录"
         _log(msg)
         cfg.last_run = datetime.now().isoformat(timespec="seconds")
         cfg.last_status = msg
@@ -316,6 +365,10 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
         msg = f"写入签到配置失败：{e}"
         _log(msg)
         return False, msg
+
+    cloud_notes = refresh_cloud_tokens(cfg)
+    for note in cloud_notes:
+        _log(note)
 
     main_py = BBS_ROOT / "main.py"
     if not main_py.exists():
@@ -366,28 +419,13 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
             _log(line.strip())
 
     ok, summary = summarize_run(proc.returncode, out)
+    if cloud_notes:
+        summary += "；" + "；".join(cloud_notes)
     cfg.last_run = datetime.now().isoformat(timespec="seconds")
     cfg.last_status = summary
     cfg.save()
     _log(f"结论：ok={ok} {summary}")
     return ok, summary
-
-
-def get_cloud_tokens() -> dict:
-    """读取引擎配置中已有的云游戏 token，供设置页预填。"""
-    path = _bbs_config_path()
-    if not path.exists() or yaml is None:
-        return {}
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        cn = (data.get("cloud_games") or {}).get("cn") or {}
-        return {
-            "genshin": str((cn.get("genshin") or {}).get("token") or ""),
-            "zzz": str((cn.get("zzz") or {}).get("token") or ""),
-            "sr": str((cn.get("honkai_sr") or {}).get("token") or ""),
-        }
-    except Exception:
-        return {}
 
 
 def read_log_tail(n: int = 80) -> str:
