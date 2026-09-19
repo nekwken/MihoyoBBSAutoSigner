@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from app_config import BBS_ROOT, LOG_PATH, TrayConfig
+from app_config import BBS_ROOT, HOME, LOG_PATH, TrayConfig
 from device_identity import ensure_device
 
 try:
@@ -75,6 +75,10 @@ ENGINE_DEPS_PROBE = (
 def find_engine_python() -> str:
     candidates = []
     if getattr(sys, "frozen", False):
+        # 发布包内置运行时优先，其次用户显式指定，最后系统 PATH
+        bundled = HOME / "runtime" / "python.exe"
+        if bundled.exists():
+            candidates.append(str(bundled))
         override = os.environ.get("MIHOYO_PYTHON")
         if override:
             candidates.append(override)
