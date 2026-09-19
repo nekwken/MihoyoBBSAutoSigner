@@ -112,6 +112,8 @@ def classify_result(result_msg: str) -> int:
         "出错", "失败", "异常", "无效", "已过期", "请重新", "无法",
         "CookieError", "StokenError", "Traceback", "retcode\":-100",
     )
+    if "部分子任务失败" in text:
+        return StatusCode.PARTIAL_FAILURE.value
     if "触发验证码" in text:
         return StatusCode.CAPTCHA_TRIGGERED.value
     if any(t in text for t in fail_tokens):
@@ -142,11 +144,26 @@ def main() -> Tuple[int, str]:
     return_data = []
     raise_stoken = False
 
-    mihoyo_result, raise_stoken = run_mihoyobbs()
-    return_data.append(mihoyo_result)
-    return_data.append(run_cn_tasks())
-    return_data.append(run_os_tasks())
-    run_web_activity()
+    try:
+        mihoyo_result, raise_stoken = run_mihoyobbs()
+        return_data.append(mihoyo_result)
+    except StokenError:
+        raise_stoken = True
+    except Exception as e:
+        log.error(f"米游社模块异常（已跳过）：{e}")
+        return_data.append(f"米游社：模块异常 {e}")
+
+    for name, fn in (("国服", run_cn_tasks), ("国际服", run_os_tasks)):
+        try:
+            return_data.append(fn())
+        except Exception as e:
+            log.error(f"{name}任务异常（已跳过）：{e}")
+            return_data.append(f"{name}：模块异常 {e}")
+
+    try:
+        run_web_activity()
+    except Exception as e:
+        log.error(f"网页活动任务异常（已跳过）：{e}")
 
     if raise_stoken:
         raise StokenError("Stoken 异常")
@@ -188,6 +205,9 @@ def task_run() -> int:
             summary = "今日已签到/任务已完成"
         log.info(f"RESULT: SUCCESS | {summary}")
         log.info(push_message)
+    elif status_code == StatusCode.PARTIAL_FAILURE.value:
+        log.warning("RESULT: PARTIAL | 部分子任务失败，详情见日志")
+        log.warning(push_message)
     elif status_code == StatusCode.CAPTCHA_TRIGGERED.value:
         log.warning("RESULT: FAILURE | 社区签到触发验证码")
         log.warning(push_message)

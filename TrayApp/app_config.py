@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0-beta.1"
 
 
 def _exe_or_file_dir() -> Path:
@@ -32,14 +32,10 @@ def find_bbs_root() -> Path:
             if cur in seen:
                 break
             seen.add(cur)
-            candidate = cur / "MihoyoBBSTools"
-            if (candidate / "main.py").exists() and (candidate / "config").exists():
-                return candidate
-            if (
-                cur.name == "MihoyoBBSTools"
-                and (cur / "main.py").exists()
-                and (cur / "config").exists()
-            ):
+            for candidate in (cur / "MihoyoBBSTools", cur / "engine" / "MihoyoBBSTools"):
+                if (candidate / "main.py").exists() and (candidate / "config").exists():
+                    return candidate
+            if cur.name == "MihoyoBBSTools" and (cur / "main.py").exists():
                 return cur
             if cur.parent == cur:
                 break
@@ -53,17 +49,18 @@ CONFIG_PATH = HOME / "tray_config.json"
 LOG_PATH = HOME / "tray.log"
 ICON_PATH = HOME / "assets" / "icon.ico"
 
-BBS_BOARDS = {
-    1: "崩坏3",
-    2: "原神",
-    3: "崩坏2",
-    4: "未定事件簿",
-    5: "大别野",
-    6: "崩坏：星穹铁道",
-    8: "绝区零",
-    9: "因缘精灵",
-    10: "星布谷地",
-}
+# 统一勾选表：每个板块一行；game_key 为 None 表示该板块没有独立的游戏签到
+BOARD_ROWS = [
+    (1, "崩坏3", "honkai3rd"),
+    (2, "原神", "genshin"),
+    (3, "崩坏2", "honkai2"),
+    (4, "未定事件簿", "tears"),
+    (5, "大别野", None),
+    (6, "崩坏：星穹铁道", "honkai_sr"),
+    (8, "绝区零", "zzz"),
+    (9, "因缘精灵", None),
+    (10, "星布谷地", None),
+]
 
 DEFAULT = {
     "autostart": False,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import queue
 import threading
 import tkinter as tk
@@ -9,7 +8,14 @@ from tkinter import messagebox, ttk
 from typing import Callable
 
 import autostart
-from app_config import APP_NAME, APP_VERSION, BBS_BOARDS, BBS_ROOT, ICON_PATH, TrayConfig
+from app_config import (
+    APP_NAME,
+    APP_VERSION,
+    BBS_ROOT,
+    BOARD_ROWS,
+    ICON_PATH,
+    TrayConfig,
+)
 from make_icon import ensure_icon
 from account_store import format_account_status, load_account_info, logout_and_clear
 from device_identity import ensure_device
@@ -97,10 +103,11 @@ class SettingsWindow:
             self.root = tk.Toplevel(master)
         else:
             self.root = tk.Tk()
-        self.root.title("米游社签到 · 设置")
+        self.root.title("米游社自动签到器 · 设置")
         self._apply_window_icon(self.root)
-        self.root.geometry("500x700")
-        self.root.resizable(False, False)
+        self.root.geometry("660x780")
+        self.root.minsize(560, 620)
+        self.root.resizable(True, True)
         self.root.configure(bg=PANEL)
         self.root.attributes("-topmost", True)
         self.root.withdraw()
@@ -177,46 +184,96 @@ class SettingsWindow:
             padx=10, pady=6, command=self._on_close,
         ).pack(side="right")
 
+    def _make_scrollable(self, parent: tk.Frame) -> tk.Frame:
+        canvas = tk.Canvas(parent, bg=PANEL, highlightthickness=0)
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+        inner = tk.Frame(canvas, bg=PANEL)
+        canvas.create_window((0, 0), window=inner, anchor="nw", tags="inner")
+
+        def on_inner_configure(_e: tk.Event) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfigure("inner", width=canvas.winfo_width())
+
+        inner.bind("<Configure>", on_inner_configure)
+
+        def on_wheel(event: tk.Event) -> None:
+            delta = getattr(event, "delta", 0)
+            if delta:
+                canvas.yview_scroll(-1 * (1 if delta > 0 else -1), "units")
+
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", on_wheel))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+        canvas.bind("<Button-4>", lambda _e: canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>", lambda _e: canvas.yview_scroll(1, "units"))
+        return inner
+
     def _build_features(self, parent: tk.Frame) -> None:
-        wrap = tk.Frame(parent, bg=PANEL)
+        wrap = self._make_scrollable(parent)
         wrap.pack(fill="both", expand=True, padx=8, pady=6)
 
-        ttk.Label(wrap, text="签到功能", style="Section.TLabel").pack(anchor="w", pady=(4, 2))
-        feat = tk.Frame(wrap, bg=PANEL)
-        feat.pack(fill="x")
-        self.var_bbs = tk.BooleanVar(value=self.cfg.enable_bbs)
-        self.var_sr = tk.BooleanVar(value=self.cfg.enable_honkai_sr)
-        self.var_zzz = tk.BooleanVar(value=self.cfg.enable_zzz)
-        self.var_ys = tk.BooleanVar(value=self.cfg.enable_genshin)
-        self.var_bh3 = tk.BooleanVar(value=self.cfg.enable_honkai3rd)
-        self.var_bh2 = tk.BooleanVar(value=self.cfg.enable_honkai2)
-        self.var_nxx = tk.BooleanVar(value=self.cfg.enable_tears)
+        ttk.Label(wrap, text="游戏签到 · 社区打卡", style="Section.TLabel").pack(anchor="w", pady=(4, 4))
+        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=1)
+        box.pack(fill="x")
+
+        header_font = ("Segoe UI", 9, "bold")
+        tk.Label(box, text="游戏 / 板块", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
+            row=0, column=0, sticky="w", padx=(12, 4), pady=(8, 2)
+        )
+        tk.Label(box, text="游戏签到", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
+            row=0, column=1, padx=14, pady=(8, 2)
+        )
+        tk.Label(box, text="社区打卡", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
+            row=0, column=2, padx=14, pady=(8, 2)
+        )
+
+        game_flags = {
+            "honkai3rd": self.cfg.enable_honkai3rd,
+            "genshin": self.cfg.enable_genshin,
+            "honkai2": self.cfg.enable_honkai2,
+            "tears": self.cfg.enable_tears,
+            "honkai_sr": self.cfg.enable_honkai_sr,
+            "zzz": self.cfg.enable_zzz,
+        }
+        self._game_vars: dict[str, tk.BooleanVar] = {}
+        self._board_vars: dict[int, tk.BooleanVar] = {}
+        self._board_cbs: dict[int, ttk.Checkbutton] = {}
+        selected = set(self.cfg.checkin_list)
+        for i, (gid, name, game_key) in enumerate(BOARD_ROWS, start=1):
+            tk.Label(box, text=name, bg="#FFFFFF", font=("Segoe UI", 10)).grid(
+                row=i, column=0, sticky="w", padx=(12, 4), pady=2
+            )
+            if game_key:
+                var = tk.BooleanVar(value=bool(game_flags[game_key]))
+                self._game_vars[game_key] = var
+                ttk.Checkbutton(box, variable=var).grid(row=i, column=1, padx=14, pady=2)
+            else:
+                tk.Label(box, text="—", bg="#FFFFFF", fg=MUTED, font=("Segoe UI", 10)).grid(
+                    row=i, column=1, padx=14, pady=2
+                )
+            bvar = tk.BooleanVar(value=gid in selected)
+            self._board_vars[gid] = bvar
+            cb = ttk.Checkbutton(box, variable=bvar, command=self._sync_task_state)
+            cb.grid(row=i, column=2, padx=14, pady=2)
+            self._board_cbs[gid] = cb
+        tk.Frame(box, bg="#FFFFFF", height=8).grid(row=len(BOARD_ROWS) + 1, columnspan=3)
+
+        ttk.Label(wrap, text="米游币任务", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
+        tasks = tk.Frame(wrap, bg=PANEL)
+        tasks.pack(fill="x")
         self.var_read = tk.BooleanVar(value=self.cfg.bbs_read)
         self.var_like = tk.BooleanVar(value=self.cfg.bbs_like)
         self.var_share = tk.BooleanVar(value=self.cfg.bbs_share)
-        ttk.Checkbutton(feat, text="米游社社区签到 / 米游币", variable=self.var_bbs).grid(
-            row=0, column=0, sticky="w", pady=2
-        )
-        ttk.Checkbutton(feat, text="看帖", variable=self.var_read).grid(row=1, column=0, sticky="w")
-        ttk.Checkbutton(feat, text="点赞", variable=self.var_like).grid(row=2, column=0, sticky="w")
-        ttk.Checkbutton(feat, text="分享", variable=self.var_share).grid(row=3, column=0, sticky="w")
-        ttk.Checkbutton(feat, text="星穹铁道", variable=self.var_sr).grid(row=0, column=1, sticky="w", padx=16)
-        ttk.Checkbutton(feat, text="绝区零", variable=self.var_zzz).grid(row=1, column=1, sticky="w", padx=16)
-        ttk.Checkbutton(feat, text="原神", variable=self.var_ys).grid(row=2, column=1, sticky="w", padx=16)
-        ttk.Checkbutton(feat, text="崩坏3", variable=self.var_bh3).grid(row=0, column=2, sticky="w", padx=8)
-        ttk.Checkbutton(feat, text="崩坏2", variable=self.var_bh2).grid(row=1, column=2, sticky="w", padx=8)
-        ttk.Checkbutton(feat, text="未定事件簿", variable=self.var_nxx).grid(row=2, column=2, sticky="w", padx=8)
-
-        ttk.Label(wrap, text="社区签到板块", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
-        boards = tk.Frame(wrap, bg=PANEL)
-        boards.pack(fill="x")
-        selected = set(self.cfg.checkin_list)
-        for i, (gid, name) in enumerate(BBS_BOARDS.items()):
-            var = tk.BooleanVar(value=gid in selected)
-            self._board_vars[gid] = var
-            ttk.Checkbutton(boards, text=name, variable=var).grid(
-                row=i // 3, column=i % 3, sticky="w", padx=4, pady=2
-            )
+        self._task_cbs = [
+            ttk.Checkbutton(tasks, text="看帖", variable=self.var_read),
+            ttk.Checkbutton(tasks, text="点赞", variable=self.var_like),
+            ttk.Checkbutton(tasks, text="分享", variable=self.var_share),
+        ]
+        for cb in self._task_cbs:
+            cb.pack(side="left", padx=(0, 14))
+        self._sync_task_state()
 
         ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)
@@ -264,7 +321,7 @@ class SettingsWindow:
         self.ent_delay.insert(0, str(self.cfg.random_delay_sec))
 
         ttk.Label(wrap, text="启动 / 关闭", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
-        self.var_autostart = tk.BooleanVar(value=autostart.is_enabled() or self.cfg.autostart)
+        self.var_autostart = tk.BooleanVar(value=autostart.is_enabled())
         self.var_launch_run = tk.BooleanVar(value=self.cfg.run_on_launch)
         self.var_min_tray = tk.BooleanVar(value=bool(self.cfg.minimize_to_tray))
         ttk.Checkbutton(wrap, text="开机自启动（当前用户）", variable=self.var_autostart).pack(anchor="w")
@@ -291,6 +348,23 @@ class SettingsWindow:
             text=f"签到配置：{BBS_ROOT / 'config' / 'config.yaml'}",
             style="Muted.TLabel",
         ).pack(anchor="w", pady=(10, 0))
+        self.lastrun_var = tk.StringVar(value=self._last_run_text())
+        ttk.Label(wrap, textvariable=self.lastrun_var, style="Muted.TLabel").pack(anchor="w")
+
+    def _last_run_text(self) -> str:
+        last = self.cfg.last_run or "从未"
+        status = self.cfg.last_status or ""
+        return f"上次运行：{last}    结果：{status}" if status else f"上次运行：{last}"
+
+    def _refresh_last_run(self) -> None:
+        try:
+            self.cfg = TrayConfig.load()
+        except Exception:
+            pass
+        try:
+            self.lastrun_var.set(self._last_run_text())
+        except Exception:
+            pass
 
     def _build_account(self, parent: tk.Frame) -> None:
         wrap = tk.Frame(parent, bg=PANEL)
@@ -524,6 +598,20 @@ class SettingsWindow:
         else:
             messagebox.showwarning("Stoken", res.message)
 
+    def _sync_task_state(self) -> None:
+        """未选任何社区板块时，米游币任务无意义：强制关闭并禁用勾选。"""
+        any_board = any(var.get() for var in self._board_vars.values())
+        if not any_board:
+            self.var_read.set(False)
+            self.var_like.set(False)
+            self.var_share.set(False)
+        state = "normal" if any_board else "disabled"
+        for cb in self._task_cbs:
+            try:
+                cb.configure(state=state)
+            except Exception:
+                pass
+
     def _collect_times(self) -> list[str] | None:
         return [f"{self.var_hour.get().zfill(2)}:{self.var_minute.get().zfill(2)}"]
 
@@ -540,8 +628,13 @@ class SettingsWindow:
 
     def _collect(self) -> TrayConfig | None:
         boards = [gid for gid, var in self._board_vars.items() if var.get()]
-        if self.var_bbs.get() and not boards:
-            messagebox.showerror("设置", "启用社区签到时请至少勾选一个板块")
+        any_board = bool(boards)
+        any_game = any(var.get() for var in self._game_vars.values())
+        if not any_board and not any_game:
+            messagebox.showerror("设置", "请至少勾选一项：游戏签到或社区打卡")
+            return None
+        if (self.var_read.get() or self.var_like.get() or self.var_share.get()) and not any_board:
+            messagebox.showerror("设置", "米游币任务需要至少勾选一个社区打卡板块")
             return None
         times = self._collect_times()
         if times is None:
@@ -556,13 +649,13 @@ class SettingsWindow:
             return None
 
         cfg = self.cfg
-        cfg.enable_bbs = self.var_bbs.get()
-        cfg.enable_honkai_sr = self.var_sr.get()
-        cfg.enable_zzz = self.var_zzz.get()
-        cfg.enable_genshin = self.var_ys.get()
-        cfg.enable_honkai3rd = self.var_bh3.get()
-        cfg.enable_honkai2 = self.var_bh2.get()
-        cfg.enable_tears = self.var_nxx.get()
+        cfg.enable_bbs = any_board
+        cfg.enable_genshin = self._game_vars["genshin"].get()
+        cfg.enable_honkai3rd = self._game_vars["honkai3rd"].get()
+        cfg.enable_honkai2 = self._game_vars["honkai2"].get()
+        cfg.enable_tears = self._game_vars["tears"].get()
+        cfg.enable_honkai_sr = self._game_vars["honkai_sr"].get()
+        cfg.enable_zzz = self._game_vars["zzz"].get()
         cfg.bbs_read = self.var_read.get()
         cfg.bbs_like = self.var_like.get()
         cfg.bbs_share = self.var_share.get()
@@ -644,6 +737,7 @@ class SettingsWindow:
             self.cfg = TrayConfig.load()
         except Exception:
             pass
+        self._refresh_last_run()
         try:
             self.status_var.set(message or "就绪")
         except Exception:
@@ -703,6 +797,8 @@ class SettingsWindow:
 
     def show_now(self) -> None:
         self._show_flag = False
+        self._refresh_last_run()
+        self._refresh_account_status()
         try:
             self.root.deiconify()
             self.root.lift()
@@ -726,12 +822,12 @@ class SettingsWindow:
                     fn()
                 except Exception:
                     pass
-            if self._show_flag:
-                self.show_now()
         except queue.Empty:
             pass
         except Exception:
             pass
+        if self._show_flag:
+            self.show_now()
 
     def destroy(self) -> None:
         self._stop_waiting()

@@ -8,10 +8,10 @@ import pystray
 from PIL import Image
 
 import autostart
-from app_config import APP_NAME, TrayConfig
+from app_config import APP_NAME, APP_TITLE, TrayConfig
 from device_identity import ensure_device
 from make_icon import ensure_icon
-from runner import read_log_tail, run_checkin
+from runner import run_checkin
 from scheduler import Scheduler, next_run_time
 from settings_ui import SettingsWindow
 
@@ -32,7 +32,7 @@ class TrayApp:
         # UI lives on the main thread
         self.root = tk.Tk()
         self.root.withdraw()
-        self.root.title("MihoyoBBSTray")
+        self.root.title(APP_TITLE)
 
         self.settings = SettingsWindow(
             cfg=self.cfg,
@@ -53,10 +53,8 @@ class TrayApp:
                 pystray.MenuItem(
                     "开机自启",
                     self._menu_autostart,
-                    checked=lambda item: bool(self.cfg.autostart or autostart.is_enabled()),
+                    checked=lambda item: autostart.is_enabled(),
                 ),
-                pystray.MenuItem("关于", self._menu_about),
-                pystray.MenuItem("查看日志", self._menu_log),
                 pystray.MenuItem("退出", self._menu_quit),
             ),
         )
@@ -82,6 +80,12 @@ class TrayApp:
         except Exception:
             pass
 
+    def _notify(self, ok: bool, msg: str) -> None:
+        try:
+            self.icon.notify(msg, APP_TITLE)
+        except Exception:
+            pass
+
     def _run_async(self) -> None:
         if self._busy:
             self._set_status("签到进行中…")
@@ -94,8 +98,10 @@ class TrayApp:
                 ok, msg = run_checkin(self.cfg)
                 self.cfg = TrayConfig.load()
                 self._set_status(msg if ok else f"失败：{msg}")
+                self._notify(ok, msg if ok else f"失败：{msg}")
             except Exception as e:
                 self._set_status(f"异常：{e}")
+                self._notify(False, f"异常：{e}")
             finally:
                 self._busy = False
 
@@ -105,12 +111,6 @@ class TrayApp:
         self._want_settings = True
 
     def _menu_settings(self, icon=None, item=None) -> None:
-        self._request_settings()
-
-    def _menu_about(self, icon=None, item=None) -> None:
-        self._request_settings()
-
-    def _menu_log(self, icon=None, item=None) -> None:
         self._request_settings()
 
     def _menu_run(self, icon=None, item=None) -> None:
@@ -136,10 +136,14 @@ class TrayApp:
         self._set_status("设置已保存")
 
     def _menu_autostart(self, icon=None, item=None) -> None:
-        self.cfg.autostart = not bool(self.cfg.autostart or autostart.is_enabled())
-        self.cfg.save()
-        autostart.set_enabled(self.cfg.autostart)
-        self._set_status("已开启自启" if self.cfg.autostart else "已关闭自启")
+        desired = not autostart.is_enabled()
+        ok = autostart.set_enabled(desired)
+        if ok:
+            self.cfg.autostart = desired
+            self.cfg.save()
+            self._set_status("已开启自启" if desired else "已关闭自启")
+        else:
+            self._set_status("自启设置失败（注册表写入被拒绝）")
 
     def _menu_quit(self, icon=None, item=None) -> None:
         self._want_quit = True

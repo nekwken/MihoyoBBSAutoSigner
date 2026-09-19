@@ -63,25 +63,48 @@ def _log(text: str) -> None:
         pass
 
 
+ENGINE_DEPS_PROBE = (
+    "import yaml\n"
+    "try:\n"
+    "    import httpx\n"
+    "except ImportError:\n"
+    "    import requests\n"
+)
+
+
 def find_engine_python() -> str:
-    if not getattr(sys, "frozen", False):
-        return sys.executable
-    candidates = [
-        os.environ.get("MIHOYO_PYTHON") or "",
-        r"C:\Users\nekwken\AppData\Local\Programs\Python\Python313\python.exe",
-        r"C:\Python313\python.exe",
-        r"C:\Python312\python.exe",
-        r"C:\Python311\python.exe",
-    ]
-    for c in candidates:
-        if c and Path(c).exists():
-            return c
-    for name in ("python", "python3"):
-        p = shutil.which(name)
-        if p and "WindowsApps" not in p:
-            return p
-    p = shutil.which("py")
-    return p or shutil.which("python") or ""
+    candidates = []
+    if getattr(sys, "frozen", False):
+        override = os.environ.get("MIHOYO_PYTHON")
+        if override:
+            candidates.append(override)
+        for name in ("python", "python3"):
+            p = shutil.which(name)
+            if p and "WindowsApps" not in p:
+                candidates.append(p)
+        p = shutil.which("py")
+        if p:
+            candidates.append(p + " -3")
+    else:
+        candidates.append(sys.executable)
+
+    for cand in candidates:
+        parts = cand.split()
+        if _deps_ok(parts):
+            return cand
+    return ""
+
+
+def _deps_ok(parts: list[str]) -> bool:
+    try:
+        proc = subprocess.run(
+            [*parts, "-c", ENGINE_DEPS_PROBE],
+            capture_output=True, text=True, timeout=20,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
 
 
 def _account_snapshot() -> dict:
@@ -208,6 +231,8 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
             if "签到成功" in result_line:
                 return True, "签到成功"
             return True, "签到任务完成"
+        if "RESULT: PARTIAL" in result_line:
+            return False, "部分任务失败，请查看日志"
         if "RESULT: FAILURE" in result_line:
             detail = result_line.split("RESULT: FAILURE", 1)[-1].lstrip(" |")
             if "验证码" in detail:
@@ -288,7 +313,7 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
 
     python = find_engine_python()
     if not python:
-        msg = "未找到可用 Python，无法运行签到引擎"
+        msg = "未找到可运行签到引擎的 Python（需已安装 pyyaml 和 httpx/requests）"
         _log(msg)
         return False, msg
     _log(f"engine python={python} frozen={getattr(sys, 'frozen', False)} main={main_py}")
@@ -304,12 +329,12 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=180,
+            timeout=420,
             env=env,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except subprocess.TimeoutExpired:
-        msg = "签到超时（180s）"
+        msg = "签到超时（420s）"
         _log(msg)
         cfg.last_run = datetime.now().isoformat(timespec="seconds")
         cfg.last_status = msg
@@ -337,10 +362,6 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
 
 
 def read_log_tail(n: int = 80) -> str:
-    if not LOG_PATH.exists():
-        return "（暂无日志）"
-    lines = LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
-    return "\n".join(lines[-n:])
     if not LOG_PATH.exists():
         return "（暂无日志）"
     lines = LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()

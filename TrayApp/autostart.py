@@ -3,22 +3,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from app_config import HOME, APP_NAME
-
-ROOT = HOME
+from app_config import APP_NAME
 
 
 def launch_command() -> str:
-    candidates = [
-        ROOT / "dist" / "MihoyoBBSTray.exe",
-        Path(__file__).resolve().parent / "dist" / "MihoyoBBSTray.exe",
-    ]
-    for exe in candidates:
-        if exe.exists():
-            return f'"{exe}"'
-    main = ROOT / "main.py"
-    if not main.exists():
-        main = Path(__file__).resolve().parent / "main.py"
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}"'
+    main = Path(__file__).resolve().parent / "main.py"
     return f'"{sys.executable}" "{main}"'
 
 

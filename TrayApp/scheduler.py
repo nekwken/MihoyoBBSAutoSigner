@@ -39,6 +39,9 @@ def next_run_time(cfg: TrayConfig, now: datetime | None = None) -> datetime | No
     return min(times)
 
 
+CATCHUP_GRACE_SEC = 3 * 3600
+
+
 class Scheduler(threading.Thread):
     def __init__(
         self,
@@ -53,6 +56,7 @@ class Scheduler(threading.Thread):
         self._stop = threading.Event()
         self._last_fire_date = ""
         self._fired_times_today: set[str] = set()
+        self._catchup_done = False
 
     def stop(self) -> None:
         self._stop.set()
@@ -72,6 +76,9 @@ class Scheduler(threading.Thread):
                 self._status(f"调度异常：{e}")
             self._stop.wait(20)
 
+    def _ran_today(self, cfg: TrayConfig, today: str) -> bool:
+        return bool(cfg.last_run) and cfg.last_run[:10] == today
+
     def _tick(self) -> None:
         cfg = self._get_cfg()
         if not cfg.schedule_enabled or not cfg.feature_enabled():
@@ -82,6 +89,24 @@ class Scheduler(threading.Thread):
         if today != self._last_fire_date:
             self._last_fire_date = today
             self._fired_times_today.clear()
+            self._catchup_done = False
+
+        # 补签：开机晚于定时点（如 PC 10:00 才开机而定时 09:30），
+        # 3 小时宽限内且今天没有运行过则补跑一次，避免整日漏签
+        if not self._catchup_done and not self._ran_today(cfg, today):
+            for label in cfg.schedule_times:
+                parsed = parse_hhmm(label)
+                if not parsed:
+                    continue
+                target = now.replace(hour=parsed[0], minute=parsed[1], second=0, microsecond=0)
+                delta = (now - target).total_seconds()
+                if 0 < delta <= CATCHUP_GRACE_SEC and label not in self._fired_times_today:
+                    self._catchup_done = True
+                    self._fired_times_today.add(label)
+                    self._status(f"错过 {label}，补签中")
+                    self._on_fire()
+                    return
+
         for label in cfg.schedule_times:
             parsed = parse_hhmm(label)
             if not parsed:

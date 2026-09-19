@@ -255,5 +255,9 @@ def run_task():
     ]
     return_data = ''
     for game_print_name, game_name, game_module in games:
-        return_data += checkin_game(game_name, game_module, game_print_name)
+        try:
+            return_data += checkin_game(game_name, game_module, game_print_name)
+        except Exception as e:
+            log.error(f"「{game_print_name}」签到异常（已跳过，不影响其它游戏）：{e}")
+            return_data += f"\n\n{game_print_name}: 签到异常，已跳过"
     return return_data

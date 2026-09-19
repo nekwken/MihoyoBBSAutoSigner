@@ -15,9 +15,9 @@ def _already_running() -> bool:
     if sys.platform != "win32":
         return False
     ctypes = __import__("ctypes")
-    kernel32 = ctypes.windll.kernel32
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateMutexW(None, False, MUTEX_NAME)
-    return kernel32.GetLastError() == 183
+    return ctypes.get_last_error() == 183
 
 
 def main() -> None:
