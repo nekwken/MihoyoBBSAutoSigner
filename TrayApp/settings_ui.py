@@ -288,7 +288,7 @@ class SettingsWindow:
         self._sync_task_state()
         ttk.Label(
             wrap,
-            text="米游币由社区打卡获得；看帖奖励需在 App 内浏览 3 个不同帖子，API 看帖暂不计币。",
+            text="米游币当前仅由社区打卡发放（30 起、连续 40）；看帖/点赞/分享奖励已下线。",
             style="Muted.TLabel",
             wraplength=420,
             justify="left",
