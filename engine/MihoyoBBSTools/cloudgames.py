@@ -88,6 +88,19 @@ class CloudZZZ(CloudGameBase):
         }
 
 
+class CloudSR(CloudGameBase):
+    def __init__(self, token) -> None:
+        super().__init__("云星穹铁道", setting.cloud_sr_sgin, "星云币", config.clear_cookie_cloudgame_sr)
+        self.headers = {
+            'Host': 'cg-hkrpg-api.mihoyo.com',
+            'Accept': '*/*',
+            'x-rpc-combo_token': token,
+            'Accept-Encoding': 'gzip, deflate',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/99.0.4844.84 Safari/537.36',
+        }
+
+
 def run_task() -> str:
     ret_msg = ""
     cg_cn = config.config['cloud_games']['cn']
@@ -101,6 +114,10 @@ def run_task() -> str:
     if cg_cn['zzz']['enable'] and cg_cn['zzz']['token'] != "":
         cg_zzz = CloudZZZ(cg_cn['zzz']['token'])
         ret_msg += cg_zzz.sign_account() + "\n\n"
+    # 云星穹铁道签到
+    if cg_cn['honkai_sr']['enable'] and cg_cn['honkai_sr']['token'] != "":
+        cg_sr = CloudSR(cg_cn['honkai_sr']['token'])
+        ret_msg += cg_sr.sign_account() + "\n\n"
     return ret_msg
 
 

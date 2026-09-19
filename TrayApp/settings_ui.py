@@ -589,20 +589,27 @@ class SettingsWindow:
                     res.message += f"；写入配置失败：{e}"
                     res.ok = False
                 try:
-                    from stoken_login import acquire_cloud_genshin_token, write_cloud_token
+                    from stoken_login import acquire_cloud_token, write_cloud_token
                     import yaml
                     from app_config import BBS_ROOT
-                    okc, msgc = acquire_cloud_genshin_token(res.stoken, res.mid, res.stuid)
-                    if okc:
-                        cfgp = BBS_ROOT / "config" / "config.yaml"
-                        data = yaml.safe_load(cfgp.read_text(encoding="utf-8")) or {}
-                        write_cloud_token(data, msgc)
+                    labels = {"genshin": "云原神", "sr": "云星穹铁道", "zzz": "云绝区零"}
+                    cfgp = BBS_ROOT / "config" / "config.yaml"
+                    data = yaml.safe_load(cfgp.read_text(encoding="utf-8")) or {}
+                    got, failed = [], []
+                    for game, label in labels.items():
+                        okc, msgc = acquire_cloud_token(game, res.stoken, res.mid, res.stuid)
+                        if okc:
+                            write_cloud_token(data, game, msgc)
+                            got.append(label)
+                        else:
+                            failed.append(f"{label}（{msgc}）")
+                    if got:
                         cfgp.write_text(
                             yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                             encoding="utf-8")
-                        res.message += "；云游戏 token 已自动获取"
-                    else:
-                        res.message += f"；云游戏 token 获取失败：{msgc}"
+                        res.message += "；云游戏已获取：" + "、".join(got)
+                    if failed:
+                        res.message += "；云游戏获取失败：" + "；".join(failed)
                 except Exception as e:
                     res.message += f"；云游戏 token 获取异常：{e}"
             self._post_ui(lambda: self._login_done(res))
@@ -626,6 +633,7 @@ class SettingsWindow:
         self._login_busy = False
         self.login_var.set(res.message)
         self._refresh_account_status()
+        self._refresh_cloud_token_status()
         if res.ok:
             messagebox.showinfo("Stoken", res.message + "\n已写入签到配置")
         else:

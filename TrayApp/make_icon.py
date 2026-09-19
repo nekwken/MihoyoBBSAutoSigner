@@ -2,7 +2,7 @@
 
 Default source of truth is procedural (approved style):
 cyan rounded tile + blue day-cells + gold checkmark,
-palette sampled from E:\\抢码工具\\repo\\docs\\images\\logo.png.
+palette sampled from the approved reference icon.
 
 Optional override: assets/custom_icon.png (square app icon only).
 Preview sheets / AI source dumps are never used as the tray icon.
@@ -20,7 +20,7 @@ except Exception:
     OUT = Path(__file__).resolve().parent / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
 
-# Palette from 抢码工具 final logo
+# App icon palette
 CYAN = (110, 226, 255, 255)        # #6EE2FF
 GLOSS = (160, 239, 255, 255)       # #A0EFFF
 BLUE = (25, 163, 255, 255)         # #19A3FF
@@ -223,9 +223,9 @@ def write_preview_sheet(path: Path | None = None) -> Path:
 
 
 def write_compare_ref(path: Path | None = None) -> Path | None:
-    """Side-by-side with 抢码工具 logo (if present) + tray-size crop."""
+    """Side-by-side with the reference logo (if present) + tray-size crop."""
     path = path or (OUT / "icon_compare_ref.png")
-    ref_path = Path(r"E:\抢码工具\repo\docs\images\logo.png")
+    ref_path = Path(__file__).with_name("assets") / "logo.png"
     if not ref_path.exists():
         return None
     ref = Image.open(ref_path).convert("RGBA").resize((256, 256), Image.LANCZOS)

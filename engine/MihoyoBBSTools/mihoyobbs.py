@@ -24,7 +24,7 @@ class Mihoyobbs:
         self.bbs_config = config.config["mihoyobbs"]
         self.bbs_list = [setting.mihoyobbs_List.get(i) for i in self.bbs_config["checkin_list"]
                          if setting.mihoyobbs_List.get(i) is not None]
-        # 对齐真机 2.114.0 金标准（ProxyPin 抓包）
+        # 与 App 2.114.0 请求格式保持一致
         self.headers = {
             "DS": tools.get_ds2("", ""),
             "cookie": login.get_stoken_cookie(),

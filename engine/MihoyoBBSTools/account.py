@@ -26,7 +26,7 @@ def get_account_list(game_id: str, headers: dict, update: bool = False) -> list:
         raise CookieError("BBS Cookie Error")
 
     log.info(f"正在获取米哈游账号绑定的「{game_name}」账号列表...")
-    # 优先真机路径：getUserGameRolesByStoken（HAR 实测）
+    # 优先使用 getUserGameRolesByStoken
     stoken_url = f"{setting.web_api}/binding/api/getUserGameRolesByStoken"
     response = http.get(stoken_url, params={"game_biz": game_id},
                         headers={"cookie": login.get_stoken_cookie(),

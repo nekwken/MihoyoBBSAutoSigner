@@ -129,7 +129,9 @@ cloud_genshin_sgin = f"{cloud_genshin_api}/hk4e_cg_cn/wallet/wallet/get"
 # 云绝区零相关api
 cloud_zzz_api = "https://cg-nap-api.mihoyo.com"
 cloud_zzz_sgin = f"{cloud_zzz_api}/nap_cn/cg/wallet/wallet/get"
-cloud_sr_api = "https://cg-hkrpg-api.mihoyo.com"  # 云星铁（端点按云游系列推断，未抓包验证）
+
+# 云星穹铁道相关api
+cloud_sr_api = "https://cg-hkrpg-api.mihoyo.com"
 cloud_sr_sgin = f"{cloud_sr_api}/hkrpg_cn/cg/wallet/wallet/get"
 
 # 接下来是国际服的内容

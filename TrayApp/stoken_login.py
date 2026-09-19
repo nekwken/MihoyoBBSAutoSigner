@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import random
 import string
@@ -375,7 +376,6 @@ def write_bbs_config(res: StokenResult, web_cookie: str | None = None):
 # ---- 云游戏 token 自动获取 ----
 
 _CG_SALT_PROD = "JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS"
-_PP = "https://passport-api.mihoyo.com"
 
 
 def _ds_prod(body: dict) -> str:
@@ -386,33 +386,94 @@ def _ds_prod(body: dict) -> str:
     return f"{t},{r},{sign}"
 
 
-def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
-    """stoken 自扫云游戏网页登录码，返回 (成功, x-rpc-combo_token 或错误说明)。"""
-    WEB_H = {
-        "x-rpc-app_id": "c76ync6mutq8", "x-rpc-client_type": "22",
-        "x-rpc-game_biz": "hk4e_cn", "x-rpc-sdk_version": "2.57.0",
-        "x-rpc-device_id": "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
-        "x-rpc-device_fp": "38d81c84f93aa", "x-rpc-device_name": "Chrome",
-        "x-rpc-device_model": "Chrome%20148.0.0.0", "x-rpc-device_os": "Windows%2010%2064-bit",
+_CLOUD_GAMES = {
+    "genshin": {
+        "web_app_id": "c76ync6mutq8", "biz": "hk4e_cn", "app_id": 4,
+        "granter_host": "hk4e-sdk.mihoyo.com",
+        "sign_key": "d0d3a7342df2026a70f650b907800111",
+        "cg_base": "https://api-cloudgame.mihoyo.com/hk4e_cg_cn",
+        "op_biz": "clgm_cn", "referer": "https://ys.mihoyo.com", "node": "genshin",
+    },
+    "sr": {
+        "web_app_id": "c90mr1bwo2rk", "biz": "hkrpg_cn", "app_id": 8,
+        "granter_host": "hkrpg-sdk.mihoyo.com",
+        "sign_key": "4650f3a396d34d576c3d65df26415394",
+        "cg_base": "https://cg-hkrpg-api.mihoyo.com/hkrpg_cn/cg",
+        "op_biz": "clgm_hkrpg-cn", "referer": "https://sr.mihoyo.com", "node": "honkai_sr",
+    },
+    "zzz": {
+        "web_app_id": "d47umitaylmo", "biz": "nap_cn", "app_id": 12,
+        "granter_host": "nap-sdk.mihoyo.com",
+        "sign_key": "8844b676f3268c082a56021d9f47a206",
+        "cg_base": "https://cg-nap-api.mihoyo.com/nap_cn/cg",
+        "op_biz": "clgm_nap-cn", "referer": "https://user.mihoyo.com", "node": "zzz",
+    },
+}
+
+_CLOUD_DEV_ID = "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde"
+_CLOUD_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36"
+
+
+def _cloud_web_headers(game_cfg: dict) -> dict:
+    return {
+        "x-rpc-app_id": game_cfg["web_app_id"], "x-rpc-client_type": "22",
+        "x-rpc-game_biz": game_cfg["biz"], "x-rpc-sdk_version": "2.57.0",
+        "x-rpc-mdk_version": "2.53.0", "x-rpc-channel_id": "1",
+        "x-rpc-device_id": _CLOUD_DEV_ID, "x-rpc-device_fp": "38d81c84f93aa",
+        "x-rpc-device_name": "Chrome", "x-rpc-device_model": "Chrome%20148.0.0.0",
+        "x-rpc-device_os": "Windows%2010%2064-bit", "x-rpc-language": "zh-cn",
         "x-rpc-lifecycle_id": uuid.uuid4().hex[:10],
         "content-type": "application/json", "referer": "https://user.mihoyo.com/",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+        "user-agent": _CLOUD_UA,
         "accept": "application/json, text/plain, */*", "accept-language": "zh-CN",
     }
-    APP_H = {
+
+
+def _cloud_app_headers(stoken: str, mid: str) -> dict:
+    return {
         "x-rpc-app_id": "bll8iq97cem8", "x-rpc-client_type": "2",
         "x-rpc-game_biz": "bbs_cn", "x-rpc-sdk_version": "2.42.0",
         "x-rpc-app_version": "2.113.1",
-        "x-rpc-device_id": "aa6ad81d-3e12-48c3-abd2-5d9b1db25156",
-        "x-rpc-device_fp": "9a6ed5d543d55",
+        "x-rpc-device_id": _CLOUD_DEV_ID, "x-rpc-device_fp": "9a6ed5d543d55",
         "x-rpc-device_name": "OnePlus PJX110", "x-rpc-device_model": "PJX110",
         "x-rpc-sys_version": "16", "x-rpc-lifecycle_id": str(uuid.uuid4())[:23],
         "cookie": f"stoken={stoken};mid={mid}",
         "Content-Type": "application/json", "User-Agent": "okhttp/4.9.3",
         "Referer": "https://app.mihoyo.com",
     }
+
+
+def _cloud_si(game_cfg: dict, ct: str, stuid: str) -> str:
+    key = game_cfg.get("sign_key") or ""
+    if not key:
+        return uuid.uuid4().hex * 2
+    msg = f"app_id={game_cfg['app_id']}&channel_id=1&combo_token={ct}&open_id={stuid}"
+    return hmac.new(key.encode(), msg.encode(), hashlib.sha256).hexdigest()
+
+
+def _cloud_cg_headers(game_cfg: dict, combo: str) -> dict:
+    return {
+        "x-rpc-cg_game_biz": game_cfg["biz"], "x-rpc-op_biz": game_cfg["op_biz"],
+        "x-rpc-channel": "mihoyo", "x-rpc-device_id": _CLOUD_DEV_ID,
+        "x-rpc-device_name": "Unknown", "x-rpc-language": "zh-cn",
+        "x-rpc-app_version": "7.0.0", "x-rpc-app_id": str(game_cfg["app_id"]),
+        "x-rpc-client_type": "16", "x-rpc-combo_token": combo,
+        "x-rpc-device_model": "Unknown", "referer": game_cfg["referer"],
+        "x-rpc-cps": "pc_mihoyo", "x-rpc-sys_version": "Windows 10",
+        "x-rpc-vendor_id": "2", "User-Agent": _CLOUD_UA,
+        "Accept": "application/json, text/plain, */*", "Content-Type": "application/json",
+    }
+
+
+def acquire_cloud_token(game: str, stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
+    """stoken 自扫云游戏网页登录码，返回 (成功, x-rpc-combo_token 或错误说明)。"""
+    game_cfg = _CLOUD_GAMES.get(game)
+    if not game_cfg:
+        return False, f"未知云游戏：{game}"
+    WEB_H = _cloud_web_headers(game_cfg)
+    APP_H = _cloud_app_headers(stoken, mid)
     client = httpx.Client(timeout=20)
-    d = client.post(PP + "/account/ma-cn-passport/web/createQRLogin", json={},
+    d = client.post(PASSPORT + "/account/ma-cn-passport/web/createQRLogin", json={},
                     headers=WEB_H).json()
     data = d.get("data") or {}
     url, ticket = data.get("url") or "", data.get("ticket") or ""
@@ -422,51 +483,56 @@ def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool
     tt = [url.split("token_types=")[1].split("&")[0].split("#")[0]]
 
     body_scan = {"ticket": tk, "token_types": tt}
-    d2 = client.post(PP + "/account/ma-cn-passport/app/scanQRLogin", json=body_scan,
+    d2 = client.post(PASSPORT + "/account/ma-cn-passport/app/scanQRLogin", json=body_scan,
                      headers={**APP_H, "DS": _ds_prod(body_scan)}).json()
     if d2.get("retcode") != 0:
         return False, f"scanQRLogin 失败：{d2.get('message')}"
     body_confirm = {"ticket": tk, "token_types": tt, "confirm": True}
-    d3 = client.post(PP + "/account/ma-cn-passport/app/confirmQRLogin", json=body_confirm,
+    d3 = client.post(PASSPORT + "/account/ma-cn-passport/app/confirmQRLogin", json=body_confirm,
                      headers={**APP_H, "DS": _ds_prod(body_confirm)}).json()
     if d3.get("retcode") != 0:
         return False, f"confirmQRLogin 失败：{d3.get('message')}"
 
-    client.post(PP + "/account/ma-cn-passport/web/queryQRLoginStatus",
+    client.post(PASSPORT + "/account/ma-cn-passport/web/queryQRLoginStatus",
                 json={"ticket": ticket}, headers=WEB_H)
-    d5 = client.post(PP + "/account/ma-cn-session/web/webVerifyForGame", json={},
+    d5 = client.post(PASSPORT + "/account/ma-cn-session/web/webVerifyForGame", json={},
                      headers=WEB_H).json()
     if d5.get("retcode") != 0:
         return False, f"webVerifyForGame 失败：{d5.get('message')}"
 
-    d6 = client.post("https://hk4e-sdk.mihoyo.com/hk4e_cn/combo/granter/login/webLogin",
-                     json={"app_id": 4, "channel_id": 1},
-                     headers={**WEB_H, "referer": "https://ys.mihoyo.com/"}).json()
+    d6 = client.post(
+        f"https://{game_cfg['granter_host']}/{game_cfg['biz']}/combo/granter/login/webLogin",
+        json={"app_id": game_cfg["app_id"], "channel_id": 1},
+        headers={**WEB_H, "referer": game_cfg["referer"] + "/"}).json()
     ct = ((d6.get("data") or {}).get("combo_token") or "")
     if not ct:
         return False, f"granter 兑换失败：{d6.get('message')}"
 
-    si = uuid.uuid4().hex * 2
-    combo = f"ai=4;ci=1;oi={stuid};ct={ct};si={si};bi=hk4e_cn"
-    CG_H = {
-        "x-rpc-cg_game_biz": "hk4e_cn", "x-rpc-op_biz": "clgm_cn",
-        "x-rpc-channel": "mihoyo", "x-rpc-device_id": "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
-        "x-rpc-device_name": "Unknown", "x-rpc-language": "zh-cn",
-        "x-rpc-app_version": "7.0.0", "x-rpc-app_id": "4", "x-rpc-client_type": "16",
-        "x-rpc-combo_token": combo, "x-rpc-device_model": "Unknown",
-        "referer": "https://ys.mihoyo.com/", "x-rpc-cps": "pc_mihoyo",
-        "x-rpc-sys_version": "Windows 10", "x-rpc-vendor_id": "2",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*", "Content-Type": "application/json",
-    }
-    r = client.post("https://api-cloudgame.mihoyo.com/hk4e_cg_cn/gamer/api/login",
-                    json={}, headers=CG_H)
-    if r.json().get("retcode") != 0:
-        return False, "云游戏会话注册失败（可能旧会话仍绑定）"
+    combo = (f"ai={game_cfg['app_id']};ci=1;oi={stuid};ct={ct};"
+             f"si={_cloud_si(game_cfg, ct, stuid)};bi={game_cfg['biz']}")
+    CG_H = _cloud_cg_headers(game_cfg, combo)
+    try:
+        client.post(game_cfg["cg_base"] + "/gamer/api/login", json={}, headers=CG_H)
+    except Exception:
+        pass
+    try:
+        w = client.get(game_cfg["cg_base"] + "/wallet/wallet/get", headers=CG_H).json()
+    except Exception as e:
+        return False, f"云游戏接口异常：{e}"
+    if w.get("retcode") != 0:
+        return False, f"云游戏验证失败：{w.get('message')}"
     return True, combo
 
 
-def write_cloud_token(engine_cfg: dict, combo: str) -> None:
+def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
+    return acquire_cloud_token("genshin", stoken, mid, stuid)
+
+
+def write_cloud_token(engine_cfg: dict, game: str, combo: str) -> None:
+    game_cfg = _CLOUD_GAMES.get(game)
+    if not game_cfg:
+        return
     cg = engine_cfg.setdefault("cloud_games", {}).setdefault("cn", {})
     cg["enable"] = True
-    cg.setdefault("genshin", {"enable": False, "token": ""})["token"] = combo
+    node = cg.setdefault(game_cfg["node"], {"enable": False, "token": ""})
+    node["token"] = combo

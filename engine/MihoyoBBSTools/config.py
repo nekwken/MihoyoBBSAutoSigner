@@ -204,6 +204,17 @@ def clear_cookie_cloudgame_zzz():
     save_config()
 
 
+def clear_cookie_cloudgame_sr():
+    global config
+    if serverless:
+        log.info("云函数执行，无法保存")
+        return None
+    config['cloud_games']['cn']['honkai_sr']["enable"] = False
+    config['cloud_games']['cn']['honkai_sr']['token'] = ""
+    log.info("国服云星穹铁道 Cookie 删除完毕")
+    save_config()
+
+
 if __name__ == "__main__":
     # 初始化配置文件
     # try:

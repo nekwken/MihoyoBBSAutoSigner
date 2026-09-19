@@ -56,7 +56,7 @@ python make_icon.py
 ## 依赖项目
 
 - [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools) — 签到引擎（MIT）
-- 协议与错误码参考公开逆向笔记 / UIGF API 合集
+- 错误码与接口行为参考社区公开整理，详见引擎仓库说明
 
 ## License
 

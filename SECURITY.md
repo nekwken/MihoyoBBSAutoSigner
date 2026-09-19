@@ -17,7 +17,7 @@
 ## 凭证安全
 
 - 勿在 Issue / PR / 讨论中粘贴 `cookie`、`stoken`、`ltoken`、`cookie_token`
-- 勿提交 `config.yaml`、`tray_config.json`、`tray.log`、HAR 抓包
+- 勿提交 `config.yaml`、`tray_config.json`、`tray.log` 等含账号凭证的本地文件
 - 疑似泄露时：立即在米游社/通行证**修改密码**并重新登录，使旧 token 失效
 
 ## 报告漏洞

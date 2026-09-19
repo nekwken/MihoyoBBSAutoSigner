@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "1.2.0-beta.3"
+APP_VERSION = "1.2.0-beta.4"
 
 
 def _exe_or_file_dir() -> Path:
