@@ -370,3 +370,104 @@ def write_bbs_config(res: StokenResult, web_cookie: str | None = None):
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
     )
     return path
+
+
+# ---- 云游戏 token 自动获取（stoken 自扫云游戏网页登录二维码）----
+# 协议详见 E:/抢码工具/mihoyo-protocol/10-miyoubbs-tasks.md、11-behavior-log.md
+
+_CG_SALT_PROD = "JwYDpKvLj6MrMqqYU6jTKF17KNO2PXoS"
+_PP = "https://passport-api.mihoyo.com"
+
+
+def _ds_prod(body: dict) -> str:
+    t = str(int(time.time()))
+    r = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+    b = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+    sign = hashlib.md5(f"salt={_CG_SALT_PROD}&t={t}&r={r}&b={b}&q=".encode()).hexdigest()
+    return f"{t},{r},{sign}"
+
+
+def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
+    """stoken 自扫云游戏网页登录码，返回 (成功, x-rpc-combo_token 或错误说明)。"""
+    WEB_H = {
+        "x-rpc-app_id": "c76ync6mutq8", "x-rpc-client_type": "22",
+        "x-rpc-game_biz": "hk4e_cn", "x-rpc-sdk_version": "2.57.0",
+        "x-rpc-device_id": "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
+        "x-rpc-device_fp": "38d81c84f93aa", "x-rpc-device_name": "Chrome",
+        "x-rpc-device_model": "Chrome%20148.0.0.0", "x-rpc-device_os": "Windows%2010%2064-bit",
+        "x-rpc-lifecycle_id": uuid.uuid4().hex[:10],
+        "content-type": "application/json", "referer": "https://user.mihoyo.com/",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+        "accept": "application/json, text/plain, */*", "accept-language": "zh-CN",
+    }
+    APP_H = {
+        "x-rpc-app_id": "bll8iq97cem8", "x-rpc-client_type": "2",
+        "x-rpc-game_biz": "bbs_cn", "x-rpc-sdk_version": "2.42.0",
+        "x-rpc-app_version": "2.113.1",
+        "x-rpc-device_id": "aa6ad81d-3e12-48c3-abd2-5d9b1db25156",
+        "x-rpc-device_fp": "9a6ed5d543d55",
+        "x-rpc-device_name": "OnePlus PJX110", "x-rpc-device_model": "PJX110",
+        "x-rpc-sys_version": "16", "x-rpc-lifecycle_id": str(uuid.uuid4())[:23],
+        "cookie": f"stoken={stoken};mid={mid}",
+        "Content-Type": "application/json", "User-Agent": "okhttp/4.9.3",
+        "Referer": "https://app.mihoyo.com",
+    }
+    client = httpx.Client(timeout=20)
+    d = client.post(PP + "/account/ma-cn-passport/web/createQRLogin", json={},
+                    headers=WEB_H).json()
+    data = d.get("data") or {}
+    url, ticket = data.get("url") or "", data.get("ticket") or ""
+    if not ticket:
+        return False, f"createQRLogin 失败：{d.get('message')}"
+    tk = url.split("tk=")[1].split("&")[0]
+    tt = [url.split("token_types=")[1].split("&")[0].split("#")[0]]
+
+    body_scan = {"ticket": tk, "token_types": tt}
+    d2 = client.post(PP + "/account/ma-cn-passport/app/scanQRLogin", json=body_scan,
+                     headers={**APP_H, "DS": _ds_prod(body_scan)}).json()
+    if d2.get("retcode") != 0:
+        return False, f"scanQRLogin 失败：{d2.get('message')}"
+    body_confirm = {"ticket": tk, "token_types": tt, "confirm": True}
+    d3 = client.post(PP + "/account/ma-cn-passport/app/confirmQRLogin", json=body_confirm,
+                     headers={**APP_H, "DS": _ds_prod(body_confirm)}).json()
+    if d3.get("retcode") != 0:
+        return False, f"confirmQRLogin 失败：{d3.get('message')}"
+
+    client.post(PP + "/account/ma-cn-passport/web/queryQRLoginStatus",
+                json={"ticket": ticket}, headers=WEB_H)
+    d5 = client.post(PP + "/account/ma-cn-session/web/webVerifyForGame", json={},
+                     headers=WEB_H).json()
+    if d5.get("retcode") != 0:
+        return False, f"webVerifyForGame 失败：{d5.get('message')}"
+
+    d6 = client.post("https://hk4e-sdk.mihoyo.com/hk4e_cn/combo/granter/login/webLogin",
+                     json={"app_id": 4, "channel_id": 1},
+                     headers={**WEB_H, "referer": "https://ys.mihoyo.com/"}).json()
+    ct = ((d6.get("data") or {}).get("combo_token") or "")
+    if not ct:
+        return False, f"granter 兑换失败：{d6.get('message')}"
+
+    si = uuid.uuid4().hex * 2
+    combo = f"ai=4;ci=1;oi={stuid};ct={ct};si={si};bi=hk4e_cn"
+    CG_H = {
+        "x-rpc-cg_game_biz": "hk4e_cn", "x-rpc-op_biz": "clgm_cn",
+        "x-rpc-channel": "mihoyo", "x-rpc-device_id": "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
+        "x-rpc-device_name": "Unknown", "x-rpc-language": "zh-cn",
+        "x-rpc-app_version": "7.0.0", "x-rpc-app_id": "4", "x-rpc-client_type": "16",
+        "x-rpc-combo_token": combo, "x-rpc-device_model": "Unknown",
+        "referer": "https://ys.mihoyo.com/", "x-rpc-cps": "pc_mihoyo",
+        "x-rpc-sys_version": "Windows 10", "x-rpc-vendor_id": "2",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/148.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*", "Content-Type": "application/json",
+    }
+    r = client.post("https://api-cloudgame.mihoyo.com/hk4e_cg_cn/gamer/api/login",
+                    json={}, headers=CG_H)
+    if r.json().get("retcode") != 0:
+        return False, "云游戏会话注册失败（可能旧会话仍绑定）"
+    return True, combo
+
+
+def write_cloud_token(engine_cfg: dict, combo: str) -> None:
+    cg = engine_cfg.setdefault("cloud_games", {}).setdefault("cn", {})
+    cg["enable"] = True
+    cg.setdefault("genshin", {"enable": False, "token": ""})["token"] = combo

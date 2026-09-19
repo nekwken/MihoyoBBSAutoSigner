@@ -602,6 +602,23 @@ class SettingsWindow:
                 except Exception as e:
                     res.message += f"；写入配置失败：{e}"
                     res.ok = False
+                try:
+                    from stoken_login import acquire_cloud_genshin_token, write_cloud_token
+                    import yaml
+                    from app_config import BBS_ROOT
+                    okc, msgc = acquire_cloud_genshin_token(res.stoken, res.mid, res.stuid)
+                    if okc:
+                        cfgp = BBS_ROOT / "config" / "config.yaml"
+                        data = yaml.safe_load(cfgp.read_text(encoding="utf-8")) or {}
+                        write_cloud_token(data, msgc)
+                        cfgp.write_text(
+                            yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                            encoding="utf-8")
+                        res.message += "；云游戏 token 已自动获取"
+                    else:
+                        res.message += f"；云游戏 token 获取失败：{msgc}"
+                except Exception as e:
+                    res.message += f"；云游戏 token 获取异常：{e}"
             self._post_ui(lambda: self._login_done(res))
 
         threading.Thread(target=work, daemon=True).start()
