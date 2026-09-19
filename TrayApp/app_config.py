@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "1.2.0-beta.5"
+APP_VERSION = "1.2.0-beta.6"
 
 
 def _exe_or_file_dir() -> Path:
@@ -49,6 +49,84 @@ CONFIG_PATH = HOME / "tray_config.json"
 LOG_PATH = HOME / "tray.log"
 ICON_PATH = HOME / "assets" / "icon.ico"
 
+# 引擎 config.yaml 兜底模板（与 config.yaml.example 同构；配置文件缺失且无模板时使用）
+ENGINE_CONFIG_FALLBACK = """enable: true
+version: 15
+push: ''
+account:
+  cookie: ''
+  stuid: ''
+  stoken: ''
+  mid: ''
+device:
+  name: Xiaomi MI 6
+  model: Mi 6
+  id: ''
+  fp: ''
+mihoyobbs:
+  enable: true
+  checkin: true
+  checkin_list:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 8
+games:
+  cn:
+    enable: true
+    useragent: ''
+    retries: 3
+    genshin:
+      checkin: true
+      black_list: []
+    honkai2:
+      checkin: false
+      black_list: []
+    honkai3rd:
+      checkin: false
+      black_list: []
+    tears_of_themis:
+      checkin: false
+      black_list: []
+    honkai_sr:
+      checkin: false
+      black_list: []
+    zzz:
+      checkin: false
+      black_list: []
+cloud_games:
+  cn:
+    enable: false
+    genshin:
+      enable: false
+      token: ''
+    zzz:
+      enable: false
+      token: ''
+    honkai_sr:
+      enable: false
+      token: ''
+"""
+
+
+def engine_config_path(create: bool = True) -> Path:
+    """引擎 config.yaml 路径；缺失时自动从 config.yaml.example 或内置模板生成。"""
+    cfg_dir = BBS_ROOT / "config"
+    path = cfg_dir / "config.yaml"
+    if path.exists() or not create:
+        return path
+    try:
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        example = cfg_dir / "config.yaml.example"
+        text = example.read_text(encoding="utf-8") if example.exists() else ENGINE_CONFIG_FALLBACK
+        path.write_text(text, encoding="utf-8")
+    except Exception:
+        pass
+    return path
+
 # 统一勾选表：每个板块一行；game_key 为 None 表示该板块没有独立的游戏签到
 BOARD_ROWS = [
     (1, "崩坏3", "honkai3rd"),
@@ -84,9 +162,12 @@ DEFAULT = {
     "cloud_genshin_token": "",
     "cloud_zzz_token": "",
     "cloud_sr_token": "",
+    "account_nickname": "",
+    "account_stuid": "",
     "device_id": "",
     "device_fp": "",
     "last_run": "",
+    "last_ok_run": "",
     "last_status": "",
 }
 
@@ -114,9 +195,12 @@ class TrayConfig:
     cloud_genshin_token: str = ""
     cloud_zzz_token: str = ""
     cloud_sr_token: str = ""
+    account_nickname: str = ""
+    account_stuid: str = ""
     device_id: str = ""
     device_fp: str = ""
     last_run: str = ""
+    last_ok_run: str = ""
     last_status: str = ""
 
     @classmethod

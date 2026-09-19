@@ -15,7 +15,7 @@ import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from app_config import BBS_ROOT
+from app_config import BBS_ROOT, engine_config_path
 from aigis_solver import parse_aigis_header, solve_aigis_challenge
 
 PASSPORT = "https://passport-api.mihoyo.com"
@@ -83,6 +83,7 @@ class StokenResult:
         self.stoken = ""
         self.mid = ""
         self.stuid = ""
+        self.nickname = ""
         self.cookie_token = ""
         self.ltoken = ""
         self.aigis = ""
@@ -333,7 +334,9 @@ def write_bbs_config(res: StokenResult, web_cookie: str | None = None):
     import yaml
     from pathlib import Path
 
-    path = BBS_ROOT / "config" / "config.yaml"
+    path = engine_config_path(create=True)
+    if not path.exists():
+        raise FileNotFoundError(f"未找到配置文件：{path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     acc = data.setdefault("account", {})
     acc["stuid"] = res.stuid
@@ -526,6 +529,64 @@ def acquire_cloud_token(game: str, stoken: str, mid: str, stuid: str) -> tuple[b
 
 def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
     return acquire_cloud_token("genshin", stoken, mid, stuid)
+
+
+# ---- 账号身份（uid / 米游社昵称）----
+
+_BBS_USER_FULL_INFO = "https://bbs-api.miyoushe.com/user/api/getUserFullInfo"
+_BBS_SALT = "47f15f1b66bee46b816115d8e8e6ebb6"
+
+
+def _ds1(query: str = "", body: str = "") -> str:
+    t = str(int(time.time()))
+    r = str(random.randint(100000, 200000))
+    sign = hashlib.md5(
+        f"salt={_BBS_SALT}&t={t}&r={r}&b={body}&q={query}".encode()).hexdigest()
+    return f"{t},{r},{sign}"
+
+
+def fetch_stuid(stoken: str, mid: str, device_id: str = "", device_fp: str = "") -> str:
+    """用 stoken 换取账号 uid（aid）；失败返回空串。"""
+    body = {"mid": mid, "token": {"token": stoken, "token_type": 1}, "refresh": False}
+    try:
+        headers = passport_headers(device_id or "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
+                                   device_fp or "38d81c84f93aa")
+        data, _ = _post("account/ma-cn-session/app/verify", headers, body)
+        info = ((data.get("data") or {}).get("user_info") or {})
+        return str(info.get("aid") or info.get("uid") or "")
+    except Exception:
+        return ""
+
+
+def fetch_nickname(stoken: str, mid: str, stuid: str) -> str:
+    """取米游社昵称；失败返回空串。"""
+    if not (stoken and stuid):
+        return ""
+    headers = {
+        "DS": _ds1(),
+        "cookie": f"stoken={stoken};mid={mid};ltuid={stuid};account_id={stuid};stuid={stuid}",
+        "x-rpc-client_type": "2", "x-rpc-app_version": "2.114.0", "x-rpc-sys_version": "16",
+        "x-rpc-channel": "miyousheluodi",
+        "x-rpc-device_id": "5aa5b5f4-37ea-4488-b5a5-45473ad0dcde",
+        "x-rpc-device_name": "OnePlus PJX110", "x-rpc-device_model": "PJX110",
+        "Referer": "https://app.mihoyo.com", "Content-Type": "application/json; charset=UTF-8",
+        "Host": "bbs-api.miyoushe.com", "User-Agent": "okhttp/4.9.3",
+    }
+    try:
+        r = httpx.get(f"{_BBS_USER_FULL_INFO}?uid={stuid}", headers=headers, timeout=20)
+        data = r.json()
+        info = ((data.get("data") or {}).get("user_info") or {})
+        return str(info.get("nickname") or "")
+    except Exception:
+        return ""
+
+
+def fetch_account_profile(stoken: str, mid: str, device_id: str = "",
+                          device_fp: str = "", stuid: str = "") -> tuple[str, str]:
+    """返回 (uid, 米游社昵称)，两者均可能为空串。"""
+    uid = stuid or fetch_stuid(stoken, mid, device_id, device_fp)
+    nickname = fetch_nickname(stoken, mid, uid) if uid else ""
+    return uid, nickname
 
 
 def write_cloud_token(engine_cfg: dict, game: str, combo: str) -> None:

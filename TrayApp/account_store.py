@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app_config import BBS_ROOT, LOG_PATH, TrayConfig
+from app_config import BBS_ROOT, LOG_PATH, TrayConfig, engine_config_path
 from device_identity import ensure_device
 from runner import _log
 
@@ -13,14 +13,14 @@ except ImportError:
 
 
 def bbs_config_path() -> Path:
-    return BBS_ROOT / "config" / "config.yaml"
+    return engine_config_path(create=True)
 
 
 def load_account_info() -> dict:
     path = bbs_config_path()
     empty = {"logged_in": False, "stuid": "", "mid": "", "stoken_set": False, "error": ""}
     if not path.exists():
-        empty["error"] = "未找到 config.yaml"
+        empty["error"] = "未找到 config.yaml（可在「关于」页打开配置目录检查）"
         return empty
     if yaml is None:
         empty["error"] = "缺少 PyYAML"
@@ -45,15 +45,15 @@ def load_account_info() -> dict:
     }
 
 
-def format_account_status(info: dict | None = None) -> str:
+def format_account_status(info: dict | None = None, nickname: str = "") -> str:
     info = info or load_account_info()
     if info.get("error"):
         return info["error"]
     if not info.get("logged_in"):
         return "未登录，请使用短信验证码登录"
     stuid = info.get("stuid") or "-"
-    mid = info.get("mid") or "-"
-    return f"UID：{stuid}\n米游社ID：{mid}"
+    nick = (nickname or "").strip()
+    return f"UID：{stuid}\n米游社昵称：{nick or '（获取中…）'}"
 
 
 def logout_and_clear(cfg: TrayConfig | None = None) -> tuple[bool, str]:

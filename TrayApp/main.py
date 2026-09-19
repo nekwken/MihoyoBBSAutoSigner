@@ -31,12 +31,11 @@ def main() -> None:
 
 
 def _signal_running_instance() -> None:
-    """已有实例在跑时：非静默模式则请求其弹出设置页；静默模式保持托盘。"""
+    """已有实例在跑时：请求其弹出设置页（再次启动=用户明确要看界面）。"""
     try:
-        from app_config import HOME, TrayConfig
+        from app_config import HOME
 
-        if not TrayConfig.load().silent_launch:
-            (HOME / "show_request.flag").write_text("", encoding="utf-8")
+        (HOME / "show_request.flag").write_text("", encoding="utf-8")
     except Exception:
         pass
 

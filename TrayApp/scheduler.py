@@ -39,7 +39,7 @@ def next_run_time(cfg: TrayConfig, now: datetime | None = None) -> datetime | No
     return min(times)
 
 
-CATCHUP_GRACE_SEC = 3 * 3600
+# 补签策略：当天到点后只要还没签过，何时启动/唤醒都会补跑一次（仅限当日）
 
 
 class Scheduler(threading.Thread):
@@ -48,11 +48,13 @@ class Scheduler(threading.Thread):
         on_fire: Callable[[], None],
         get_cfg: Callable[[], TrayConfig],
         on_status: Callable[[str], None] | None = None,
+        is_busy: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(daemon=True, name="mihoyo-tray-scheduler")
         self._on_fire = on_fire
         self._get_cfg = get_cfg
         self._on_status = on_status or (lambda s: None)
+        self._is_busy = is_busy or (lambda: False)
         self._stop = threading.Event()
         self._last_fire_date = ""
         self._fired_times_today: set[str] = set()
@@ -77,9 +79,14 @@ class Scheduler(threading.Thread):
             self._stop.wait(20)
 
     def _ran_today(self, cfg: TrayConfig, today: str) -> bool:
-        return bool(cfg.last_run) and cfg.last_run[:10] == today
+        """当天是否已成功签到（失败不算，便于当天稍后自动重试）。"""
+        stamp = getattr(cfg, "last_ok_run", "") or ""
+        return bool(stamp) and stamp[:10] == today
 
     def _tick(self) -> None:
+        # 签到执行期间不干预：既不覆盖「签到中…」状态，也不重复触发
+        if self._is_busy():
+            return
         cfg = self._get_cfg()
         if not cfg.schedule_enabled or not cfg.feature_enabled():
             self._status("定时关闭")
@@ -91,8 +98,7 @@ class Scheduler(threading.Thread):
             self._fired_times_today.clear()
             self._catchup_done = False
 
-        # 补签：开机晚于定时点（如 PC 10:00 才开机而定时 09:30），
-        # 3 小时宽限内且今天没有运行过则补跑一次，避免整日漏签
+        # 补签：当天到点后若还没签过（关机/休眠/晚开机），当天任意时刻补跑一次
         if not self._catchup_done and not self._ran_today(cfg, today):
             for label in cfg.schedule_times:
                 parsed = parse_hhmm(label)
@@ -100,12 +106,19 @@ class Scheduler(threading.Thread):
                     continue
                 target = now.replace(hour=parsed[0], minute=parsed[1], second=0, microsecond=0)
                 delta = (now - target).total_seconds()
-                if 0 < delta <= CATCHUP_GRACE_SEC and label not in self._fired_times_today:
+                if delta > 0 and label not in self._fired_times_today:
                     self._catchup_done = True
                     self._fired_times_today.add(label)
                     self._status(f"错过 {label}，补签中")
                     self._on_fire()
                     return
+
+        if self._ran_today(cfg, today):
+            # 当天已成功签到：定时点不再重复执行，只刷新下次时间
+            nxt = next_run_time(cfg, now)
+            if nxt:
+                self._status(f"今日已完成 · 下次 {nxt.strftime('%m-%d %H:%M')}")
+            return
 
         for label in cfg.schedule_times:
             parsed = parse_hhmm(label)

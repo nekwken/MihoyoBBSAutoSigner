@@ -84,9 +84,12 @@ def run_cn_tasks() -> str:
 
 def classify_result(result_msg: str) -> int:
     text = result_msg or ""
+    # 真实失败特征：日志里明确报错/跳过；不含「已过期」等描述状态的正常文案
+    # （云游戏钱包会输出「畅玩卡状态为 已过期」，不应当成签到失败）
     fail_tokens = (
-        "出错", "失败", "异常", "无效", "已过期", "请重新", "无法",
-        "CookieError", "StokenError", "Traceback", "retcode\":-100",
+        "签到异常", "签到失败", "模块异常", "执行异常", "出错", "失效", "无效",
+        "请重新", "无法", "未登录", "CookieError", "StokenError", "Traceback",
+        "retcode\":-100",
     )
     if "部分子任务失败" in text:
         return StatusCode.PARTIAL_FAILURE.value

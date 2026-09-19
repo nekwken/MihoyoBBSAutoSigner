@@ -8,7 +8,7 @@ import pystray
 from PIL import Image
 
 import autostart
-from app_config import APP_NAME, APP_TITLE, HOME, TrayConfig
+from app_config import APP_NAME, APP_TITLE, HOME, TrayConfig, engine_config_path
 from device_identity import ensure_device
 from make_icon import ensure_icon
 from runner import run_checkin
@@ -23,6 +23,10 @@ class TrayApp:
         self.cfg = TrayConfig.load()
         try:
             ensure_device(self.cfg)
+        except Exception:
+            pass
+        try:
+            engine_config_path(create=True)
         except Exception:
             pass
         self._busy = False
@@ -62,6 +66,7 @@ class TrayApp:
         )
         self.scheduler = Scheduler(
             on_fire=self._run_async,
+            is_busy=lambda: self._busy,
             get_cfg=lambda: self.cfg,
             on_status=self._set_status,
         )
@@ -92,9 +97,9 @@ class TrayApp:
         if self._busy:
             self._set_status("签到进行中…")
             return
+        self._busy = True  # 先占位再开线程：避免定时器/菜单连点触发并发重复签到
 
         def worker() -> None:
-            self._busy = True
             self._set_status("签到中…")
             try:
                 ok, msg = run_checkin(self.cfg)
@@ -118,10 +123,11 @@ class TrayApp:
     def _menu_run(self, icon=None, item=None) -> None:
         self._run_async()
 
-    def _run_blocking_for_ui(self) -> None:
-        """Settings 窗口在后台线程调用；此处只跑签到，不做 UI。"""
+    def _run_blocking_for_ui(self) -> bool:
+        """Settings 窗口在后台线程调用；返回是否真正执行了签到（未执行=False）。"""
         if self._busy:
-            return
+            self._set_status("签到进行中…")
+            return False
         self._busy = True
         self._set_status("签到中…")
         try:
@@ -132,6 +138,7 @@ class TrayApp:
             self._set_status(f"异常：{e}")
         finally:
             self._busy = False
+        return True
 
     def _on_saved(self, cfg: TrayConfig) -> None:
         self.cfg = cfg
@@ -162,7 +169,8 @@ class TrayApp:
         try:
             if SHOW_FLAG.exists():
                 SHOW_FLAG.unlink()
-                return not self.cfg.silent_launch
+                # 用户在别处再次启动程序 = 明确想看界面，静默设置不应吞掉该请求
+                return True
         except Exception:
             pass
         return False
@@ -216,6 +224,7 @@ class TrayApp:
         self._tray_thread.start()
         if self.cfg.run_on_launch:
             threading.Thread(target=self._run_async, daemon=True).start()
+        # 「静默启动」= 启动时不弹窗；未勾选则启动即显示设置窗口
         if not self.cfg.silent_launch:
             self._want_settings = True
         self.root.after(150, self._pump)

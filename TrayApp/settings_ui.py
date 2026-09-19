@@ -24,6 +24,7 @@ from scheduler import parse_hhmm
 from stoken_login import (
     StokenResult,
     exchange_cookie,
+    fetch_account_profile,
     login_by_sms,
     login_verify,
     send_sms,
@@ -78,7 +79,7 @@ class SettingsWindow:
         self,
         cfg: TrayConfig,
         on_saved: Callable[[TrayConfig], None],
-        on_run_now: Callable[[], None],
+        on_run_now: Callable[[], bool | None],
         on_request_quit: Callable[[], None] | None = None,
         status_text: str = "",
         master: tk.Misc | None = None,
@@ -450,11 +451,53 @@ class SettingsWindow:
             self.snap_var.set(info["error"])
             self.login_var.set(info["error"])
             return
-        self.snap_var.set(format_account_status(info))
+        self.snap_var.set(format_account_status(info, self.cfg.account_nickname))
         if info.get("logged_in"):
             self.login_var.set("当前状态：已登录")
+            if not self.cfg.account_nickname or not info.get("stuid"):
+                self._start_profile_refresh()
         else:
             self.login_var.set("当前状态：未登录")
+
+    def _start_profile_refresh(self) -> None:
+        """后台补全 uid / 米游社昵称（仅在缺失时触发一次）。"""
+        if getattr(self, "_profile_busy", False):
+            return
+        self._profile_busy = True
+
+        def work() -> None:
+            try:
+                import yaml as _yaml
+                from app_config import engine_config_path
+                from stoken_login import fetch_account_profile
+                from runner import _bbs_config_path
+                path = _bbs_config_path()
+                data = _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                acc = data.get("account") or {}
+                stoken = str(acc.get("stoken") or "").strip()
+                mid = str(acc.get("mid") or "").strip()
+                stuid = str(acc.get("stuid") or "").strip()
+                if not stoken:
+                    return
+                did, fp = self._device()
+                uid, nick = fetch_account_profile(stoken, mid, did, fp, stuid)
+                if uid and not stuid:
+                    acc["stuid"] = uid
+                    path.write_text(_yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                                    encoding="utf-8")
+                if nick:
+                    self.cfg.account_nickname = nick
+                if uid:
+                    self.cfg.account_stuid = str(uid)
+                if nick or uid:
+                    self.cfg.save()
+            except Exception:
+                pass
+            finally:
+                self._profile_busy = False
+                self._post_ui(self._refresh_account_status)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _build_about(self, parent: tk.Frame) -> None:
         wrap = tk.Frame(parent, bg=PANEL)
@@ -570,7 +613,16 @@ class SettingsWindow:
         def work() -> None:
             res = login_by_sms(mobile, code, did, fp, open_window=True)
             if res.ok and res.stoken:
-                res = login_verify(res.stoken, res.mid, did, fp) if res.mid else res
+                if res.mid:
+                    verified = login_verify(res.stoken, res.mid, did, fp)
+                    res.stoken = verified.stoken or res.stoken
+                    res.message = f"{res.message}；{verified.message}".strip("；")
+                try:
+                    uid, nick = fetch_account_profile(res.stoken, res.mid, did, fp, res.stuid)
+                    res.stuid = res.stuid or uid
+                    res.nickname = nick or res.nickname
+                except Exception:
+                    pass
                 try:
                     ct, lt = exchange_cookie(res.stoken, res.mid, res.stuid, did, fp)
                     res.cookie_token = ct
@@ -582,6 +634,14 @@ class SettingsWindow:
                 except Exception as e:
                     res.message += f"；写入配置失败：{e}"
                     res.ok = False
+                if res.nickname:
+                    self.cfg.account_nickname = res.nickname
+                if res.stuid:
+                    self.cfg.account_stuid = str(res.stuid)
+                try:
+                    self.cfg.save()
+                except Exception:
+                    pass
             self._post_ui(lambda: self._login_done(res))
 
         threading.Thread(target=work, daemon=True).start()
@@ -683,14 +743,21 @@ class SettingsWindow:
         self._start_waiting()
 
         def work() -> None:
+            ran = True
             try:
-                self.on_run_now()
+                result = self.on_run_now()
+                if result is False:
+                    ran = False
             except Exception as e:
                 msg = f"签到异常：{e}"
             else:
-                fresh = TrayConfig.load()
-                self.cfg = fresh
-                msg = fresh.last_status or "就绪"
+                if ran:
+                    fresh = TrayConfig.load()
+                    self.cfg = fresh
+                    msg = fresh.last_status or "就绪"
+                else:
+                    # 已有签到在执行：不能把上次的结果当成这次的结果
+                    msg = "已有签到正在进行，完成后会更新状态"
             self._post_ui(lambda m=msg: self._finish_checkin(m))
 
         threading.Thread(target=work, daemon=True, name="mihoyo-ui-checkin").start()

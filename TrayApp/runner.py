@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from app_config import BBS_ROOT, HOME, LOG_PATH, TrayConfig
+from app_config import BBS_ROOT, HOME, LOG_PATH, TrayConfig, engine_config_path
 from device_identity import ensure_device
 
 try:
@@ -51,7 +52,7 @@ SUCCESS_MARKERS = (
 
 
 def _bbs_config_path() -> Path:
-    return BBS_ROOT / "config" / "config.yaml"
+    return engine_config_path(create=True)
 
 
 def _log(text: str) -> None:
@@ -155,6 +156,10 @@ def apply_features(cfg: TrayConfig) -> Path:
 
     ensure_device(cfg)
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # 兼容缺键的手工配置：补齐引擎必需字段，避免引擎下标取值报 KeyError
+    data.setdefault("version", 15)
+    data.setdefault("enable", True)
+    data.setdefault("push", "")
     acc = data.setdefault("account", {})
 
     # repair missing stuid from mid/cookie when possible
@@ -171,10 +176,10 @@ def apply_features(cfg: TrayConfig) -> Path:
             pass
         _log(f"repair stuid -> {acc.get('stuid')!r}")
 
-    data.setdefault("mihoyobbs", {})
-    data["mihoyobbs"]["enable"] = bool(cfg.enable_bbs)
-    data["mihoyobbs"]["checkin"] = bool(cfg.enable_bbs)
-    data["mihoyobbs"]["checkin_list"] = list(cfg.checkin_list)
+    bbs = data.setdefault("mihoyobbs", {})
+    bbs["enable"] = bool(cfg.enable_bbs)
+    bbs["checkin"] = bool(cfg.enable_bbs)
+    bbs["checkin_list"] = list(cfg.checkin_list)
 
     cloud = data.setdefault("cloud_games", {}).setdefault("cn", {})
     cloud["enable"] = bool(cfg.cloud_genshin or cfg.cloud_zzz or cfg.cloud_sr)
@@ -195,6 +200,8 @@ def apply_features(cfg: TrayConfig) -> Path:
 
     games = data.setdefault("games", {})
     cn = games.setdefault("cn", {})
+    cn.setdefault("useragent", "")
+    cn.setdefault("retries", 3)
     any_game = any(
         [
             cfg.enable_genshin,
@@ -253,7 +260,10 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
                 return False, "未登录或登录状态失效，请在账号页重新登录"
             if "Stoken" in detail:
                 return False, "登录状态无效，请在账号页重新登录"
-            return False, detail[:80] if detail else "签到失败，请查看日志"
+            detail = detail.strip()
+            if not detail or detail.endswith(":") or detail.endswith("："):
+                return False, "签到未完成，请查看日志"
+            return False, detail[:80]
 
     fail_hit = next((m for m in FAIL_MARKERS if m in text), "")
     success_hit = next((m for m in SUCCESS_MARKERS if m in text), "")
@@ -336,6 +346,80 @@ def refresh_cloud_tokens(cfg: TrayConfig) -> list[str]:
     return notes
 
 
+def repair_account_identity(cfg: TrayConfig) -> list[str]:
+    """补全账号 uid / 米游社昵称（登录取不到 uid 时用 stoken 换取）。失败不阻断签到。"""
+    notes: list[str] = []
+    path = _bbs_config_path()
+    if not path.exists() or yaml is None:
+        return notes
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        return [f"账号信息检查失败：{e}"]
+    acc = data.setdefault("account", {})
+    stoken = str(acc.get("stoken") or "").strip()
+    mid = str(acc.get("mid") or "").strip()
+    stuid = str(acc.get("stuid") or "").strip()
+    if not stoken:
+        return notes
+
+    from stoken_login import StokenResult, exchange_cookie, fetch_account_profile, write_bbs_config
+
+    did, fp = ensure_device(cfg)
+    cookie = str(acc.get("cookie") or "")
+    res = StokenResult()
+    res.ok = True
+    res.stoken = stoken
+    res.mid = mid
+    res.stuid = stuid
+    for key, attr in (("cookie_token_v2", "cookie_token"), ("cookie_token", "cookie_token"),
+                      ("ltoken_v2", "ltoken"), ("ltoken", "ltoken")):
+        if getattr(res, attr):
+            continue
+        m = re.search(rf"(?:^|;\s*){key}=([^;]+)", cookie)
+        if m:
+            setattr(res, attr, m.group(1))
+
+    if not stuid:
+        uid, nick = fetch_account_profile(stoken, mid, did, fp, "")
+        if not uid:
+            return ["账号 UID 缺失且补全失败，请在「账号」页重新登录"]
+        res.stuid = uid
+        res.nickname = nick
+        notes.append("已补全账号 UID（此前缺失导致签到失败）")
+        if nick:
+            cfg.account_nickname = nick
+        cfg.account_stuid = str(uid)
+
+    # 游戏签到依赖 cookie_token / ltoken，缺失时用 stoken 重新换取
+    if not res.cookie_token or not res.ltoken:
+        try:
+            ct, lt = exchange_cookie(res.stoken, res.mid, res.stuid, did, fp)
+            if ct or lt:
+                res.cookie_token = ct or res.cookie_token
+                res.ltoken = lt or res.ltoken
+                notes.append("已补全 cookie_token / ltoken")
+        except Exception as e:
+            notes.append(f"cookie_token 补全失败：{e}")
+
+    if notes:
+        write_bbs_config(res)
+        try:
+            cfg.save()
+        except Exception:
+            pass
+    elif not cfg.account_nickname:
+        _, nick = fetch_account_profile(stoken, mid, did, fp, stuid)
+        if nick:
+            cfg.account_nickname = nick
+            cfg.account_stuid = stuid
+            try:
+                cfg.save()
+            except Exception:
+                pass
+    return notes
+
+
 def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     cfg = cfg or TrayConfig.load()
     if not cfg.feature_enabled():
@@ -366,6 +450,9 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
         _log(msg)
         return False, msg
 
+    identity_notes = repair_account_identity(cfg)
+    for note in identity_notes:
+        _log(note)
     cloud_notes = refresh_cloud_tokens(cfg)
     for note in cloud_notes:
         _log(note)
@@ -419,9 +506,14 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
             _log(line.strip())
 
     ok, summary = summarize_run(proc.returncode, out)
+    if identity_notes:
+        summary += "；" + "；".join(identity_notes)
     if cloud_notes:
         summary += "；" + "；".join(cloud_notes)
     cfg.last_run = datetime.now().isoformat(timespec="seconds")
+    if ok:
+        # 供调度器判断"当天是否已成功签到"：失败不计，便于稍后自动重试
+        cfg.last_ok_run = cfg.last_run
     cfg.last_status = summary
     cfg.save()
     _log(f"结论：ok={ok} {summary}")
