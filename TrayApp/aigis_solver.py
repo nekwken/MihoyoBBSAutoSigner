@@ -292,7 +292,27 @@ def _serve_html(gt: str, session_id: str, risk_type: str):
     return server, url, done, result
 
 
-def _webview_worker(url: str, out_path: str) -> None:
+_PARENT_RECT: tuple[int, int, int, int] | None = None
+
+
+def set_parent_rect(rect: tuple[int, int, int, int] | None) -> None:
+    """登记父窗口矩形（x, y, w, h），图形验证窗口将居中于其上。"""
+    global _PARENT_RECT
+    _PARENT_RECT = rect
+
+
+def _dialog_pos(width: int, height: int, rect=None) -> tuple[int | None, int | None]:
+    rect = rect if rect is not None else _PARENT_RECT
+    if not rect:
+        return None, None
+    try:
+        px, py, pw, ph = rect
+        return int(px + (pw - width) / 2), int(py + (ph - height) / 2)
+    except Exception:
+        return None, None
+
+
+def _webview_worker(url: str, out_path: str, rect=None) -> None:
     try:
         import webview
     except Exception:
@@ -311,12 +331,15 @@ def _webview_worker(url: str, out_path: str) -> None:
             return True
 
     try:
+        x, y = _dialog_pos(420, 560, rect)
         webview.create_window(
             "米游社 · 图形验证",
             url=url,
             js_api=Api(),
             width=420,
             height=560,
+            x=x,
+            y=y,
             on_top=True,
             easy_drag=False,
         )
@@ -334,7 +357,7 @@ def _solve_webview_process(url: str, timeout: int = 120) -> dict | None:
     os.close(fd)
     Path(out_path).write_text("{}", encoding="utf-8")
     ctx = mp.get_context("spawn")
-    proc = ctx.Process(target=_webview_worker, args=(url, out_path), daemon=True)
+    proc = ctx.Process(target=_webview_worker, args=(url, out_path, _PARENT_RECT), daemon=True)
     try:
         proc.start()
         proc.join(timeout=timeout)

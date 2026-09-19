@@ -522,9 +522,11 @@ class SettingsWindow:
         tk.Button(
             btns, text="打开日志", relief="flat", font=("Segoe UI", 10),
             padx=8, pady=4,
-            command=lambda: __import__("os").startfile(str(__import__("app_config").LOG_PATH))
-            if __import__("app_config").LOG_PATH.exists()
-            else messagebox.showinfo("关于", "日志尚未生成"),
+            command=lambda: (
+                __import__("os").startfile(str(__import__("app_config").LOG_PATH))
+                if __import__("app_config").LOG_PATH.exists()
+                else self._dialog("关于", "日志尚未生成")
+            ),
         ).pack(side="left", padx=8)
 
     def _post_ui(self, fn) -> None:
@@ -581,16 +583,18 @@ class SettingsWindow:
         if self._login_busy:
             return
         if self._sms_left > 0:
-            messagebox.showinfo("发送验证码", f"请等待 {self._sms_left} 秒后再发送")
+            self._dialog("发送验证码", f"请等待 {self._sms_left} 秒后再发送")
             return
         mobile = self.ent_account.get().strip()
         if not mobile:
-            messagebox.showerror("签到账号", "请先填写手机号")
+            self._dialog("签到账号", "请先填写手机号", kind="error")
             return
         did, fp = self._device()
         self._login_busy = True
         self._set_sms_button(False, "发送中…")
         self.login_var.set("正在发送验证码…（若需图形验证将弹出窗口）")
+
+        self._hint_parent_for_dialogs()
 
         def work() -> None:
             res = send_sms(mobile, did, fp, open_window=True)
@@ -604,11 +608,13 @@ class SettingsWindow:
         mobile = self.ent_account.get().strip()
         code = self.ent_sms.get().strip()
         if not mobile or not code:
-            messagebox.showerror("签到账号", "请填写手机号和短信验证码")
+            self._dialog("签到账号", "请填写手机号和短信验证码", kind="error")
             return
         did, fp = self._device()
         self._login_busy = True
         self.login_var.set("正在短信登录…（若需图形验证将弹出窗口）")
+
+        self._hint_parent_for_dialogs()
 
         def work() -> None:
             res = login_by_sms(mobile, code, did, fp, open_window=True)
@@ -652,53 +658,53 @@ class SettingsWindow:
         self._refresh_account_status()
         if res.ok:
             self._start_sms_cooldown(res.sms_countdown or 60)
-            messagebox.showinfo("签到账号", res.message)
+            self._dialog("签到账号", res.message)
         else:
             self._clear_sms_cooldown()
             if "图形验证" in (res.message or ""):
                 self.login_var.set(res.message + "（未进入倒计时，可立即重试）")
-            messagebox.showwarning("签到账号", res.message)
+            self._dialog("签到账号", res.message, kind="warning")
 
     def _login_done(self, res: StokenResult) -> None:
         self._login_busy = False
         self.login_var.set(res.message)
         self._refresh_account_status()
         if res.ok:
-            messagebox.showinfo("签到账号", res.message + "\n已写入签到配置")
+            self._dialog("签到账号", res.message + "\n已写入签到配置")
         else:
-            messagebox.showwarning("签到账号", res.message)
+            self._dialog("签到账号", res.message, kind="warning")
 
     def _collect_times(self) -> list[str] | None:
         return [f"{self.var_hour.get().zfill(2)}:{self.var_minute.get().zfill(2)}"]
 
     def _logout(self) -> None:
-        if not messagebox.askyesno("退出登录", "确定退出登录并清除账号数据与云游戏凭证？"):
+        if not self._dialog("退出登录", "确定退出登录并清除账号数据与云游戏凭证？", ask=True):
             return
         ok, msg = logout_and_clear(self.cfg)
         self._refresh_account_status()
         if ok:
             self.login_var.set("当前状态：未登录")
-            messagebox.showinfo("退出登录", msg)
+            self._dialog("退出登录", msg)
         else:
-            messagebox.showerror("退出登录", msg)
+            self._dialog("退出登录", msg, kind="error")
 
     def _collect(self) -> TrayConfig | None:
         boards = [gid for gid, var in self._board_vars.items() if var.get()]
         any_board = bool(boards)
         any_game = any(var.get() for var in self._game_vars.values())
         if not any_board and not any_game:
-            messagebox.showerror("设置", "请至少勾选一项：游戏签到或社区打卡")
+            self._dialog("设置", "请至少勾选一项：游戏签到或社区打卡", kind="error")
             return None
         times = self._collect_times()
         if times is None:
             return None
         if self.var_sched.get() and not times:
-            messagebox.showerror("设置", "启用定时至少要有一个时间点")
+            self._dialog("设置", "启用定时至少要有一个时间点", kind="error")
             return None
         try:
             delay = max(0, int(self.ent_delay.get().strip() or "0"))
         except ValueError:
-            messagebox.showerror("设置", "随机延迟必须是整数秒")
+            self._dialog("设置", "随机延迟必须是整数秒", kind="error")
             return None
 
         cfg = self.cfg
@@ -731,7 +737,7 @@ class SettingsWindow:
         autostart.set_enabled(cfg.autostart)
         self.on_saved(cfg)
         self.status_var.set("设置已保存")
-        messagebox.showinfo("设置", "已保存")
+        self._dialog("设置", "已保存")
 
     def _run_now(self) -> None:
         if self._checkin_running:
@@ -804,11 +810,127 @@ class SettingsWindow:
         except Exception:
             pass
 
+    def _parent_rect(self) -> tuple[int, int, int, int] | None:
+        """设置窗口在屏幕上的矩形；不可见时返回 None。"""
+        try:
+            self.root.update_idletasks()
+            if self.root.state() == "withdrawn":
+                return None
+            w, h = self.root.winfo_width(), self.root.winfo_height()
+            if w <= 1 or h <= 1:
+                return None
+            return self.root.winfo_rootx(), self.root.winfo_rooty(), w, h
+        except Exception:
+            return None
+
+    def _centered_geometry(self, win: tk.Toplevel, width: int, height: int) -> str:
+        """子窗口居中于设置窗口；设置窗口不可用时退回屏幕居中。"""
+        pos = self._parent_rect()
+        if pos is None:
+            sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+            x, y = (sw - width) // 2, (sh - height) // 2
+        else:
+            px, py, pw, ph = pos
+            x, y = px + (pw - width) // 2, py + (ph - height) // 2
+        return f"{width}x{height}+{max(0, x)}+{max(0, y)}"
+
+    def _hint_parent_for_dialogs(self) -> None:
+        """把设置窗口位置告知图形验证窗口，使其居中而非屏幕居中。"""
+        try:
+            from aigis_solver import set_parent_rect
+
+            set_parent_rect(self._parent_rect())
+        except Exception:
+            pass
+
+    def _dialog(self, title: str, message: str, kind: str = "info", ask: bool = False) -> bool:
+        """自绘模态对话框：居中于设置窗口（原生 messagebox 只能居中于屏幕）。"""
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.transient(self.root)
+        win.resizable(False, False)
+        try:
+            self._apply_window_icon(win)
+        except Exception:
+            pass
+
+        color = {"error": "#DC2626", "warning": "#B45309"}.get(kind, "#1F2937")
+        body = tk.Frame(win, bg=PANEL, padx=18, pady=14)
+        body.pack(fill="both", expand=True)
+        tk.Label(body, text=title, bg=PANEL, fg=color,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(body, text=message, bg=PANEL, fg="#1F2937", justify="left",
+                 wraplength=420, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 14))
+        btns = tk.Frame(body, bg=PANEL)
+        btns.pack(fill="x")
+        result = {"ok": False}
+
+        def close(val: bool) -> None:
+            result["ok"] = val
+            try:
+                win.grab_release()
+            except Exception:
+                pass
+            win.destroy()
+
+        if ask:
+            tk.Button(btns, text="取消", relief="flat", font=("Segoe UI", 10),
+                      padx=10, pady=3, command=lambda: close(False)).pack(side="right")
+            tk.Button(btns, text="确定", relief="flat", font=("Segoe UI", 10),
+                      padx=10, pady=3, command=lambda: close(True)).pack(side="right", padx=6)
+        else:
+            tk.Button(btns, text="确定", relief="flat", font=("Segoe UI", 10),
+                      padx=10, pady=3, command=lambda: close(True)).pack(side="right")
+
+        win.bind("<Return>", lambda e: close(True))
+        win.bind("<Escape>", lambda e: close(False))
+        win.protocol("WM_DELETE_WINDOW", lambda: close(not ask))
+        win.update_idletasks()
+        w = max(360, min(520, win.winfo_reqwidth()))
+        h = win.winfo_reqheight()
+        win.geometry(self._centered_geometry(win, w, h))
+        win.update_idletasks()
+        self._center_exact(win)
+        win.grab_set()
+        try:
+            win.focus_force()
+        except Exception:
+            pass
+        self.root.wait_window(win)
+        return result["ok"]
+
+    def _center_exact(self, win: tk.Toplevel) -> None:
+        """用 Win32 校正窗口位置，使其像素级居中于设置窗口（Tk 与边框度量不同）。"""
+        try:
+            import ctypes
+            import ctypes.wintypes as wt
+
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetParent(win.winfo_id()) or win.winfo_id()
+            rect = wt.RECT()
+            user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            fw, fh = rect.right - rect.left, rect.bottom - rect.top
+            if fw <= 1 or fh <= 1:
+                return
+            pos = self._parent_rect()
+            if pos is None:
+                x = (user32.GetSystemMetrics(0) - fw) // 2
+                y = (user32.GetSystemMetrics(1) - fh) // 2
+            else:
+                px, py, pw, ph = pos
+                x = px + (pw - fw) // 2
+                y = py + (ph - fh) // 2
+            SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x0001, 0x0004, 0x0010
+            user32.SetWindowPos(hwnd, 0, int(x), int(y), 0, 0,
+                                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)
+        except Exception:
+            pass
+
     def _show_log(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("运行日志")
         self._apply_window_icon(win)
-        win.geometry("640x420")
+        win.geometry(self._centered_geometry(win, 640, 420))
         txt = tk.Text(win, wrap="none", font=("Consolas", 10))
         txt.pack(fill="both", expand=True)
         txt.insert("1.0", read_log_tail(120))
