@@ -274,6 +274,13 @@ class SettingsWindow:
         for cb in self._task_cbs:
             cb.pack(side="left", padx=(0, 14))
         self._sync_task_state()
+        ttk.Label(
+            wrap,
+            text="当前米游币来源为社区打卡 + 看帖；点赞 / 分享已不计米游币，仅供保留互动。",
+            style="Muted.TLabel",
+            wraplength=420,
+            justify="left",
+        ).pack(anchor="w", pady=(2, 0))
 
         ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)

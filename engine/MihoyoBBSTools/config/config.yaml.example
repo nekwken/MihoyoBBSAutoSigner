@@ -29,11 +29,11 @@ mihoyobbs:
   #看帖
   read: true
   #点赞帖子
-  like: true
+  like: false  # 点赞当前不计米游币
   #取消点赞
   cancel_like: true
   #分享帖子
-  share: true
+  share: false  # 分享当前不计米游币
 # 游戏签到
 games:
   #国服控制区域
