@@ -43,7 +43,6 @@ MihoyoBBSAutoSigner {APP_VERSION}
 签到引擎：Womsxd/MihoyoBBSTools
 协议参考：公开米游社/通行证接口整理
 
-设备 device_id / device_fp 自动生成，详见日志文件。
 图形验证仅弹窗由用户完成，不会自动绕过极验。
 
 开源仓库：github.com/nekwken/MihoyoBBSAutoSigner
@@ -173,8 +172,8 @@ class SettingsWindow:
         self.tab_feat = tk.Frame(nb, bg=PANEL)
         self.tab_acct = tk.Frame(nb, bg=PANEL)
         self.tab_about = tk.Frame(nb, bg=PANEL)
-        nb.add(self.tab_feat, text="功能 / 定时")
-        nb.add(self.tab_acct, text="账号 / Stoken")
+        nb.add(self.tab_feat, text="功能")
+        nb.add(self.tab_acct, text="账号")
         nb.add(self.tab_about, text="关于")
 
         self._build_features(self.tab_feat)
@@ -290,16 +289,12 @@ class SettingsWindow:
         ttk.Checkbutton(cloud, variable=self.var_cloud_genshin).grid(row=0, column=1, sticky="w")
         ttk.Checkbutton(cloud, variable=self.var_cloud_sr).grid(row=1, column=1, sticky="w")
         ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=2, column=1, sticky="w")
-        self.ent_cloud_genshin = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
-        self.ent_cloud_sr = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
-        self.ent_cloud_zzz = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
-        self.ent_cloud_genshin.grid(row=0, column=2, sticky="we", padx=(6, 0))
-        self.ent_cloud_sr.grid(row=1, column=2, sticky="we", padx=(6, 0))
-        self.ent_cloud_zzz.grid(row=2, column=2, sticky="we", padx=(6, 0))
-        existing_tokens = get_cloud_tokens()
-        self.ent_cloud_genshin.insert(0, existing_tokens.get("genshin", ""))
-        self.ent_cloud_sr.insert(0, existing_tokens.get("sr", ""))
-        self.ent_cloud_zzz.insert(0, existing_tokens.get("zzz", ""))
+        self._cloud_token_status = {}
+        for i, key in enumerate(("genshin", "sr", "zzz")):
+            lab = tk.Label(cloud, bg=PANEL, fg=MUTED, font=("Segoe UI", 9))
+            lab.grid(row=i, column=2, sticky="w", padx=(6, 0))
+            self._cloud_token_status[key] = lab
+        self._refresh_cloud_token_status()
 
         ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)
@@ -422,7 +417,7 @@ class SettingsWindow:
         )
         self._btn_sms.pack(side="left")
         tk.Button(
-            btns, text="短信登录获取 Stoken", bg=ACCENT, fg="white", relief="flat",
+            btns, text="登录", bg=ACCENT, fg="white", relief="flat",
             font=("Segoe UI", 10, "bold"), padx=8, pady=4, command=self._login_sms,
         ).pack(side="left", padx=8)
         tk.Button(
@@ -454,13 +449,6 @@ class SettingsWindow:
         except Exception as e:
             self.login_var.set(f"设备标识初始化失败：{e}")
 
-        ttk.Label(
-            wrap,
-            text="device_id / device_fp 自动生成，仅记录在日志中，不在此展示。",
-            style="Muted.TLabel",
-            wraplength=420,
-            justify="left",
-        ).pack(anchor="w", pady=(8, 0))
 
     def _refresh_account_status(self) -> None:
         info = load_account_info()
@@ -657,6 +645,16 @@ class SettingsWindow:
         else:
             messagebox.showerror("退出登录", msg)
 
+    def _refresh_cloud_token_status(self, tokens: dict | None = None) -> None:
+        tokens = tokens if tokens is not None else get_cloud_tokens()
+        labels = {"genshin": "云原神", "sr": "云星穹铁道", "zzz": "云绝区零"}
+        for key, lab in self._cloud_token_status.items():
+            state = "已配置" if tokens.get(key) else "未配置"
+            try:
+                lab.configure(text=state)
+            except Exception:
+                pass
+
     def _collect(self) -> TrayConfig | None:
         boards = [gid for gid, var in self._board_vars.items() if var.get()]
         any_board = bool(boards)
@@ -688,9 +686,6 @@ class SettingsWindow:
         cfg.cloud_genshin = self.var_cloud_genshin.get()
         cfg.cloud_zzz = self.var_cloud_zzz.get()
         cfg.cloud_sr = self.var_cloud_sr.get()
-        cfg.cloud_genshin_token = self.ent_cloud_genshin.get().strip()
-        cfg.cloud_zzz_token = self.ent_cloud_zzz.get().strip()
-        cfg.cloud_sr_token = self.ent_cloud_sr.get().strip()
         cfg.schedule_enabled = self.var_sched.get()
         cfg.schedule_times = times
         cfg.random_delay_sec = delay

@@ -53,7 +53,7 @@ def format_account_status(info: dict | None = None) -> str:
         return "未登录，请使用短信验证码登录"
     stuid = info.get("stuid") or "-"
     mid = info.get("mid") or "-"
-    return f"已登录\nstuid={stuid}\nmid={mid}\nstoken：已配置"
+    return f"UID：{stuid}\n米游社ID：{mid}"
 
 
 def logout_and_clear(cfg: TrayConfig | None = None) -> tuple[bool, str]:
