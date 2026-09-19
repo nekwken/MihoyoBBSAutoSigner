@@ -43,37 +43,11 @@ class Mihoyobbs:
             "Accept-Encoding": "gzip",
             "User-Agent": "okhttp/4.9.3"
         }
-        self.task_header = {
-            'Accept': 'application/json, text/plain, */*',
-            'Origin': 'https://webstatic.mihoyo.com',
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Unspecified Device) AppleWebKit/537.36 (KHTML, like Gecko) '
-                          f'Version/4.0 Chrome/103.0.5060.129 Mobile Safari/537.36 miHoYoBBS/{setting.mihoyobbs_version}',
-            'Referer': 'https://webstatic.mihoyo.com',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'zh-CN,en-US;q=0.8',
-            'X-Requested-With': 'com.mihoyo.hyperion',
-            "Cookie": config.config.get("account", {}).get("cookie", ""),
-        }
         if config.config["device"]["fp"] != "":
             self.headers["x-rpc-device_fp"] = config.config["device"]["fp"]
-        # 2.114.0 起任务体系只剩打卡计币；看帖保留（不计币，见 research/FINDINGS_20260919_READ_COUNT.md）
-        self.task_do = {
-            "sign": False,
-            "read": False,
-            "read_num": 3,
-        }
-        self.task_failures: list[str] = []
+        # 2.114.0 起米游币仅打卡发放；看帖/点赞/分享奖励已下线（见 10-miyoubbs-tasks）
+        self.task_do = {"sign": False}
         self.get_tasks_list()
-        if self.task_do["read"]:
-            pass
-        else:
-            self.postsList = self.get_list()
-
-    def refresh_list(self) -> None:
-        self.postsList = self.get_list()
-
-    def get_max_req_post_num(self):
-        return self.task_do['read_num']
 
     def get_pass_challenge(self):
         req = http.get(url=setting.bbs_get_captcha, headers=self.headers)
@@ -98,10 +72,9 @@ class Mihoyobbs:
                 return check["data"]["challenge"]
         return None
 
-    # 获取任务列表，用来判断做了哪些任务
+    # 获取任务列表，用来判断打卡是否已完成
     def get_tasks_list(self, update=False):
         log.info("正在获取任务列表")
-        # 真机 2.114.0：apihub/sapi + okhttp/stoken 头（金标准）
         header = self.headers.copy()
         header["DS"] = tools.get_ds(web=False)
         req = http.get(url=setting.bbs_tasks_list, params={"point_sn": "myb"}, headers=header)
@@ -116,49 +89,14 @@ class Mihoyobbs:
         self.today_get_coins = data["data"]["can_get_points"]
         self.today_have_get_coins = data["data"]["already_received_points"]
         self.have_coins = data["data"]["total_points"]
-        tasks = {
-            58: {"attr": "sign", "done": "is_get_award"},
-            59: {"attr": "read", "done": "is_get_award", "num_attr": "read_num"},
-        }
         if self.today_get_coins == 0:
             self.task_do["sign"] = True
-            self.task_do["read"] = True
         else:
-            missions = data["data"]["states"]
-            for task in tasks.keys():
-                mission_state = next((x for x in missions if x["mission_id"] == task), None)
-                if mission_state is None:
-                    continue
-                do = tasks[task]
-                if mission_state[do["done"]]:
-                    self.task_do[do["attr"]] = True
-                elif do.get("num_attr") is not None:
-                    self.task_do[do["num_attr"]] = self.task_do[do["num_attr"]] - mission_state["happened_times"]
-        if data['data']['can_get_points'] != 0:
-            if len(data['data']['states']) == 0:
-                log.info(f"今天可以获得 {self.today_get_coins} 个米游币")
-            else:
-                new_day = data['data']['states'][0]['mission_id'] >= 62
-                log.info(f"{'新的一天，今天可以获得' if new_day else '似乎还有任务没完成，今天还能获得'}"
-                        f" {self.today_get_coins} 个米游币")
-
-    # 获取要帖子列表
-    def get_list(self) -> list:
-        choice_post_list = []
-        log.info("正在获取帖子列表......")
-        req = http.get(url=setting.bbs_post_list_url,
-                       params={"forum_id": self.bbs_list[0]["forumId"],
-                               "is_good": str(False).lower(), "is_hot": str(False).lower(),
-                               "page_size": 20, "sort_type": 1},
-                       headers=self.headers)
-        log.debug(req.text)
-        data = req.json()["data"]["list"]
-        while len(choice_post_list) < self.get_max_req_post_num():
-            post = random.choice(data)
-            if post["post"]["subject"] not in [x[1] for x in choice_post_list]:
-                choice_post_list.append([post["post"]["post_id"], post["post"]["subject"]])
-        log.info(f"已获取 {len(choice_post_list)} 个帖子")
-        return choice_post_list
+            mission_state = next((x for x in data["data"]["states"] if x["mission_id"] == 58), None)
+            if mission_state is not None and mission_state["is_get_award"]:
+                self.task_do["sign"] = True
+        if self.today_get_coins != 0:
+            log.info(f"今天可以获得 {self.today_get_coins} 个米游币")
 
     # 进行签到操作
     def signing(self):
@@ -197,52 +135,16 @@ class Mihoyobbs:
             if challenge is not None:
                 header.pop("x-rpc-challenge")
 
-    # 看帖子
-    def read_posts(self, post_info):
-        header = self.headers.copy()
-        header["DS"] = tools.get_ds(web=False)
-        req = http.get(url=setting.bbs_detail_url,
-                       params={"post_id": post_info[0], "csm_source": "official"}, headers=header)
-        log.debug(req.text)
-        data = req.json()
-        if data.get("message") == "OK":
-            log.debug(f"看帖：{post_info[1]} 成功")
-        else:
-            log.warning(f"看帖失败：{req.text[:120]}")
-            self.task_failures.append(f"看帖 {post_info[1]}")
-
-    def post_task(self):
-        log.info("正在执行看帖任务......")
-        if self.task_do["read"]:
-            log.info("看帖任务已完成!")
-            return
-        for post in self.postsList:
-            if self.task_do["read_num"] > 0:
-                self.read_posts(post)
-                self.task_do["read_num"] -= 1
-                wait()
-
     def run_task(self):
         return_data = "米游社: "
-        if self.task_do["sign"] and self.task_do["read"]:
+        if self.task_do["sign"]:
             return_data += "\n" + f"今天已经全部完成了！\n" \
                                   f"一共获得 {self.today_have_get_coins} 个米游币\n目前有 {self.have_coins} 个米游币"
             log.info(f"今天已经全部完成了！一共获得 {self.today_have_get_coins} 个米游币，目前有 {self.have_coins} 个米游币")
             return return_data
-        i = 0
-        while self.today_get_coins != 0 and i < 2:
-            if i > 0:
-                wait()
-                self.refresh_list()
-            if self.bbs_config["checkin"]:
-                self.signing()
-            self.post_task()
+        if self.bbs_config["checkin"]:
+            self.signing()
             self.get_tasks_list()
-            i += 1
-        if self.task_failures:
-            detail = "；".join(dict.fromkeys(self.task_failures))
-            return_data += "\n（部分子任务失败：" + detail + "）"
-            log.warning("部分子任务失败：" + detail)
         return_data += "\n" + f"今天已经获得 {self.today_have_get_coins} 个米游币\n" \
                               f"还能获得 {self.today_get_coins} 个米游币\n目前有 {self.have_coins} 个米游币"
         log.info(f"今天已经获得 {self.today_have_get_coins} 个米游币，"

@@ -12,9 +12,6 @@ import config
 import mihoyobbs
 import cloudgames
 import gamecheckin
-import hoyo_checkin
-import web_activity
-import os_cloudgames
 from loghelper import log
 from error import CookieError, StokenError
 
@@ -85,27 +82,6 @@ def run_cn_tasks() -> str:
     return "\n\n".join(filter(None, result))
 
 
-def run_os_tasks() -> str:
-    """执行国际服任务"""
-    result = []
-    if config.config["games"]['os']["enable"]:
-        log.info("海外版：")
-        os_result = hoyo_checkin.run_task()
-        if os_result:
-            result.append(f"海外版：{os_result}")
-    if config.config["cloud_games"]['os']["enable"]:
-        log.info("正在进行云游戏国际版签到")
-        result.append(os_cloudgames.run_task())
-    return "\n\n".join(filter(None, result))
-
-
-def run_web_activity() -> None:
-    """执行网页活动任务"""
-    if config.config["web_activity"]['enable']:
-        log.info("正在进行米游社网页活动任务")
-        web_activity.run_task()
-
-
 def classify_result(result_msg: str) -> int:
     text = result_msg or ""
     fail_tokens = (
@@ -153,17 +129,11 @@ def main() -> Tuple[int, str]:
         log.error(f"米游社模块异常（已跳过）：{e}")
         return_data.append(f"米游社：模块异常 {e}")
 
-    for name, fn in (("国服", run_cn_tasks), ("国际服", run_os_tasks)):
-        try:
-            return_data.append(fn())
-        except Exception as e:
-            log.error(f"{name}任务异常（已跳过）：{e}")
-            return_data.append(f"{name}：模块异常 {e}")
-
     try:
-        run_web_activity()
+        return_data.append(run_cn_tasks())
     except Exception as e:
-        log.error(f"网页活动任务异常（已跳过）：{e}")
+        log.error(f"签到任务异常（已跳过）：{e}")
+        return_data.append(f"任务模块异常 {e}")
 
     if raise_stoken:
         raise StokenError("Stoken 异常")

@@ -175,7 +175,16 @@ def apply_features(cfg: TrayConfig) -> Path:
     data["mihoyobbs"]["enable"] = bool(cfg.enable_bbs)
     data["mihoyobbs"]["checkin"] = bool(cfg.enable_bbs)
     data["mihoyobbs"]["checkin_list"] = list(cfg.checkin_list)
-    data["mihoyobbs"]["read"] = bool(cfg.bbs_read)
+
+    cloud = data.setdefault("cloud_games", {}).setdefault("cn", {})
+    cloud["enable"] = bool(cfg.cloud_genshin or cfg.cloud_zzz)
+    for key, flag, token_field in (("genshin", cfg.cloud_genshin, "cloud_genshin_token"),
+                                   ("zzz", cfg.cloud_zzz, "cloud_zzz_token")):
+        node = cloud.setdefault(key, {"enable": False, "token": ""})
+        node["enable"] = bool(flag)
+        token = str(getattr(cfg, token_field) or "").strip()
+        if token:
+            node["token"] = token
 
     device = data.setdefault("device", {})
     device["id"] = cfg.device_id
@@ -361,6 +370,22 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     cfg.save()
     _log(f"结论：ok={ok} {summary}")
     return ok, summary
+
+
+def get_cloud_tokens() -> dict:
+    """读取引擎配置中已有的云游戏 token，供设置页预填。"""
+    path = _bbs_config_path()
+    if not path.exists() or yaml is None:
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        cn = (data.get("cloud_games") or {}).get("cn") or {}
+        return {
+            "genshin": str((cn.get("genshin") or {}).get("token") or ""),
+            "zzz": str((cn.get("zzz") or {}).get("token") or ""),
+        }
+    except Exception:
+        return {}
 
 
 def read_log_tail(n: int = 80) -> str:

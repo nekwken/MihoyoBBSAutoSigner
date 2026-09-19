@@ -16,7 +16,6 @@ config = {
     'device': {'name': 'Xiaomi MI 6', 'model': 'Mi 6', 'id': '', 'fp': ''},
     'mihoyobbs': {
         'enable': True, 'checkin': True, 'checkin_list': [5, 2],
-        'read': True
     },
     'games': {
         'cn': {
@@ -31,14 +30,6 @@ config = {
             'honkai_sr': {'checkin': False, 'black_list': []},
             'zzz': {'checkin': False, 'black_list': []}
         },
-        'os': {
-            'enable': False, 'cookie': '', 'lang': 'zh-cn',
-            'genshin': {'checkin': False, 'black_list': []},
-            'honkai3rd': {'checkin': False, 'black_list': []},
-            'tears_of_themis': {'checkin': False, 'black_list': []},
-            'honkai_sr': {'checkin': False, 'black_list': []},
-            'zzz': {'checkin': False, 'black_list': []}
-        }
     },
     'cloud_games': {
         "cn": {
@@ -46,16 +37,7 @@ config = {
             "genshin": {'enable': False, 'token': ""},
             "zzz": {'enable': False, 'token': ""}
         },
-        "os": {
-            "enable": False, 'lang': 'zh-cn',
-            "genshin": {'enable': False, 'token': ""}
-        }
-    },
-    'competition': {
-        'enable': False,
-        'genius_invokation': {'enable': False, 'account': [], 'checkin': False, 'weekly': False}
-    },
-    'web_activity': {'enable': False, 'activities': []}
+    }
 }
 config_raw = deepcopy(config)
 
@@ -118,7 +100,6 @@ def update_v14_update(data: dict):
     update_config_need = True
     new_config = deepcopy(data)
     new_config['version'] = 15
-    new_config['web_activity'] = {'enable': False, 'activities': []}
     log.info("config 已升级到：15")
     return new_config
 
@@ -208,17 +189,6 @@ def clear_cookie_cloudgame_genshin():
     config['cloud_games']['cn']['genshin']["enable"] = False
     config['cloud_games']['cn']['genshin']['token'] = ""
     log.info("国服云原神 Cookie 删除完毕")
-    save_config()
-
-
-def clear_cookie_cloudgame_genshin_os():
-    global config
-    if serverless:
-        log.info("云函数执行，无法保存")
-        return None
-    config['cloud_games']['os']['genshin']["enable"] = False
-    config['cloud_games']['os']['genshin']['token'] = ""
-    log.info("国际服云原神 Cookie 删除完毕")
     save_config()
 
 

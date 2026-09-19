@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "1.2.0-beta.1"
+APP_VERSION = "1.2.0-beta.2"
 
 
 def _exe_or_file_dir() -> Path:
@@ -78,7 +78,10 @@ DEFAULT = {
     "enable_honkai2": False,
     "enable_tears": False,
     "checkin_list": [2, 6, 8],
-    "bbs_read": True,
+    "cloud_genshin": False,
+    "cloud_zzz": False,
+    "cloud_genshin_token": "",
+    "cloud_zzz_token": "",
     "device_id": "",
     "device_fp": "",
     "last_run": "",
@@ -103,7 +106,10 @@ class TrayConfig:
     enable_honkai2: bool = False
     enable_tears: bool = False
     checkin_list: list[int] = field(default_factory=lambda: [2, 6, 8])
-    bbs_read: bool = True
+    cloud_genshin: bool = False
+    cloud_zzz: bool = False
+    cloud_genshin_token: str = ""
+    cloud_zzz_token: str = ""
     device_id: str = ""
     device_fp: str = ""
     last_run: str = ""

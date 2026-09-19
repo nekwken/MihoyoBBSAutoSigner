@@ -78,8 +78,6 @@ bbs_get_multi_token_by_login_ticket = f"{web_api}/auth/api/getMultiTokenByLoginT
 bbs_get_cookie_token_by_stoken = f"{web_api}/auth/api/getCookieAccountInfoBySToken"
 bbs_tasks_list = f"{bbs_api}/apihub/sapi/getUserMissionsState"  # 真机 2.114.0 为 sapi
 bbs_sign_url = f"{bbs_api}/apihub/app/api/signIn"  # post
-bbs_post_list_url = f"{bbs_api}/post/api/getForumPostList"
-bbs_detail_url = f"{bbs_api}/post/api/getPostFull"
 bbs_get_captcha = f"{bbs_api}/misc/api/createVerification?is_high=true"
 bbs_captcha_verify = f"{bbs_api}/misc/api/verifyVerification"
 

@@ -19,7 +19,7 @@ from app_config import (
 from make_icon import ensure_icon
 from account_store import format_account_status, load_account_info, logout_and_clear
 from device_identity import ensure_device
-from runner import read_log_tail, run_checkin
+from runner import get_cloud_tokens, read_log_tail, run_checkin
 from scheduler import parse_hhmm
 from stoken_login import (
     StokenResult,
@@ -273,24 +273,33 @@ class SettingsWindow:
                 )
             bvar = tk.BooleanVar(value=gid in selected)
             self._board_vars[gid] = bvar
-            cb = ttk.Checkbutton(box, variable=bvar, command=self._sync_task_state)
+            cb = ttk.Checkbutton(box, variable=bvar)
             cb.grid(row=i, column=2, padx=14, pady=2)
             self._board_cbs[gid] = cb
         tk.Frame(box, bg="#FFFFFF", height=8).grid(row=len(BOARD_ROWS) + 1, columnspan=3)
 
-        ttk.Label(wrap, text="米游币任务", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
-        tasks = tk.Frame(wrap, bg=PANEL)
-        tasks.pack(fill="x")
-        self.var_read = tk.BooleanVar(value=self.cfg.bbs_read)
-        self._task_cbs = [ttk.Checkbutton(tasks, text="看帖", variable=self.var_read)]
-        for cb in self._task_cbs:
-            cb.pack(side="left", padx=(0, 14))
-        self._sync_task_state()
+        ttk.Label(wrap, text="云游戏签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
+        cloud = tk.Frame(wrap, bg=PANEL)
+        cloud.pack(fill="x")
+        ttk.Label(cloud, text="云原神").grid(row=0, column=0, sticky="w", pady=2)
+        ttk.Label(cloud, text="云绝区零").grid(row=1, column=0, sticky="w", pady=2)
+        self.var_cloud_genshin = tk.BooleanVar(value=self.cfg.cloud_genshin)
+        self.var_cloud_zzz = tk.BooleanVar(value=self.cfg.cloud_zzz)
+        ttk.Checkbutton(cloud, variable=self.var_cloud_genshin).grid(row=0, column=1, sticky="w")
+        ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=1, column=1, sticky="w")
+        self.ent_cloud_genshin = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
+        self.ent_cloud_zzz = tk.Entry(cloud, font=("Segoe UI", 9), width=44)
+        self.ent_cloud_genshin.grid(row=0, column=2, sticky="we", padx=(6, 0))
+        self.ent_cloud_zzz.grid(row=1, column=2, sticky="we", padx=(6, 0))
+        existing_tokens = get_cloud_tokens()
+        self.ent_cloud_genshin.insert(0, existing_tokens.get("genshin", ""))
+        self.ent_cloud_zzz.insert(0, existing_tokens.get("zzz", ""))
         ttk.Label(
             wrap,
-            text="米游币当前仅由社区打卡发放（30 起、连续 40）；看帖/点赞/分享奖励已下线。",
+            text="米游币当前仅由社区打卡发放（30 起、连续 40）；看帖/点赞/分享奖励已下线。\n"
+                 "云游戏 token：云游戏 App 抓包请求头 x-rpc-combo_token。",
             style="Muted.TLabel",
-            wraplength=420,
+            wraplength=460,
             justify="left",
         ).pack(anchor="w", pady=(2, 0))
 
@@ -619,18 +628,6 @@ class SettingsWindow:
         else:
             messagebox.showwarning("Stoken", res.message)
 
-    def _sync_task_state(self) -> None:
-        """未选任何社区板块时，看帖任务无意义：强制关闭并禁用勾选。"""
-        any_board = any(var.get() for var in self._board_vars.values())
-        if not any_board:
-            self.var_read.set(False)
-        state = "normal" if any_board else "disabled"
-        for cb in self._task_cbs:
-            try:
-                cb.configure(state=state)
-            except Exception:
-                pass
-
     def _collect_times(self) -> list[str] | None:
         return [f"{self.var_hour.get().zfill(2)}:{self.var_minute.get().zfill(2)}"]
 
@@ -652,9 +649,6 @@ class SettingsWindow:
         if not any_board and not any_game:
             messagebox.showerror("设置", "请至少勾选一项：游戏签到或社区打卡")
             return None
-        if self.var_read.get() and not any_board:
-            messagebox.showerror("设置", "看帖任务需要至少勾选一个社区打卡板块")
-            return None
         times = self._collect_times()
         if times is None:
             return None
@@ -675,8 +669,11 @@ class SettingsWindow:
         cfg.enable_tears = self._game_vars["tears"].get()
         cfg.enable_honkai_sr = self._game_vars["honkai_sr"].get()
         cfg.enable_zzz = self._game_vars["zzz"].get()
-        cfg.bbs_read = self.var_read.get()
         cfg.checkin_list = sorted(boards)
+        cfg.cloud_genshin = self.var_cloud_genshin.get()
+        cfg.cloud_zzz = self.var_cloud_zzz.get()
+        cfg.cloud_genshin_token = self.ent_cloud_genshin.get().strip()
+        cfg.cloud_zzz_token = self.ent_cloud_zzz.get().strip()
         cfg.schedule_enabled = self.var_sched.get()
         cfg.schedule_times = times
         cfg.random_delay_sec = delay

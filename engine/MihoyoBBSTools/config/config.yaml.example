@@ -17,7 +17,6 @@ mihoyobbs:
   checkin_list:
   - 5
   - 2
-  read: true
 games:
   cn:
     enable: true
@@ -42,25 +41,6 @@ games:
     zzz:
       checkin: false
       black_list: []
-  os:
-    enable: false
-    cookie: ''
-    lang: zh-cn
-    genshin:
-      checkin: false
-      black_list: []
-    honkai3rd:
-      checkin: false
-      black_list: []
-    tears_of_themis:
-      checkin: false
-      black_list: []
-    honkai_sr:
-      checkin: false
-      black_list: []
-    zzz:
-      checkin: false
-      black_list: []
 cloud_games:
   cn:
     enable: false
@@ -70,19 +50,3 @@ cloud_games:
     zzz:
       enable: false
       token: ''
-  os:
-    lang: zh-cn
-    enable: false
-    genshin:
-      enable: false
-      token: ''
-competition:
-  enable: false
-  genius_invokation:
-    enable: false
-    account: []
-    checkin: false
-    weekly: false
-web_activity:
-  enable: false
-  activities: []
