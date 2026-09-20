@@ -36,7 +36,7 @@
 
 ## 米游币说明（2026-09 现状）
 
-- 米游币现在**只有社区打卡**发放：首日 30 枚，连续签到递增（最高 40 枚/天）
+- 米游币现在**只有社区打卡**发放：首日 30 枚，满三天40枚，满五天50枚
 - 点赞（2025-12）、分享（2026-03）、看帖（2026-03）的米游币奖励均已下线，因此本工具已移除点赞与分享
 - 拿满当日米游币只需完成社区打卡
 
@@ -93,7 +93,7 @@ MihoyoBBSAutoSigner/
 
 ## 引擎说明
 
-`engine/MihoyoBBSTools` 基于开源项目 [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools)（MIT）并包含本项目为适配当前客户端所做的本地修改（版本号、接口路径、请求头与结果输出等）。**不向原仓库提交 PR。**
+`engine/MihoyoBBSTools` 基于开源项目 [Womsxd/MihoyoBBSTools](https://github.com/Womsxd/MihoyoBBSTools)（MIT）并包含本项目为适配当前客户端所做的本地修改（版本号、接口路径、请求头与结果输出等）。
 
 ## 免责声明
 
