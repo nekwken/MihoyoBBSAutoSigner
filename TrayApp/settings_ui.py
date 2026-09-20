@@ -19,6 +19,7 @@ from app_config import (
 from make_icon import ensure_icon
 from account_store import format_account_status, load_account_info, logout_and_clear
 from device_identity import ensure_device
+from dpi import apply_dpi_to_tk, px as _px, set_scale_from, window_dpi
 from runner import read_log_tail, run_checkin
 from scheduler import parse_hhmm
 from stoken_login import (
@@ -99,14 +100,11 @@ class SettingsWindow:
         self._checkin_running = False
         self._dots = 0
         self._wait_job = None
-        if master is not None:
-            self.root = tk.Toplevel(master)
-        else:
-            self.root = tk.Tk()
+        self.root = tk.Toplevel(master) if master is not None else tk.Tk()
+        self._dpi_now = set_scale_from(self.root) and int(self.root.winfo_fpixels("1i"))
         self.root.title("米游社自动签到器 · 设置")
         self._apply_window_icon(self.root)
-        self.root.geometry("660x780")
-        self.root.minsize(560, 620)
+        self._apply_window_metrics()
         self.root.configure(bg=PANEL)
         self.root.attributes("-topmost", True)
         self.root.withdraw()
@@ -117,6 +115,48 @@ class SettingsWindow:
         self._fit_default_geometry()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _apply_window_metrics(self) -> None:
+        """窗口尺寸按当前 DPI 换算（DPI 变化后需重新应用）。"""
+        try:
+            self.root.geometry(f"{_px(660)}x{_px(780)}")
+            self.root.minsize(_px(560), _px(620))
+        except Exception:
+            pass
+
+    def _watch_dpi(self) -> None:
+        """窗口被拖到不同缩放比例的显示器时重新排版。"""
+        dpi = window_dpi(self.root)
+        if not dpi or abs(dpi - self._dpi_now) < 24:
+            return
+        self._dpi_now = dpi
+        apply_dpi_to_tk(self.root, dpi)
+        self._rebuild_for_dpi()
+
+    def _rebuild_for_dpi(self) -> None:
+        """按新 DPI 重建界面（保留勾选状态与当前页签）。"""
+        try:
+            idx = self.nb.index(self.nb.select())
+        except Exception:
+            idx = 0
+        try:
+            for child in list(self.root.winfo_children()):
+                child.destroy()
+            self._board_vars.clear()
+            self._board_cbs.clear()
+            self._game_vars.clear()
+            self._cloud_token_status = {}
+            self._apply_window_metrics()
+            self._build()
+            self._fit_default_geometry()
+            self._refresh_account_status()
+            self._refresh_last_run()
+            try:
+                self.nb.select(idx)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def _fit_default_geometry(self) -> None:
         """默认窗口以能完整显示功能页内容为准（超出屏幕时才需要滚动）。"""
         try:
@@ -124,10 +164,10 @@ class SettingsWindow:
             inner = getattr(self, "_feat_inner", None)
             if inner is None:
                 return
-            content_h = inner.winfo_reqheight() + 180
+            content_h = inner.winfo_reqheight() + _px(180)
             screen_h = self.root.winfo_screenheight()
-            h = min(max(760, content_h), screen_h - 120)
-            w = max(680, inner.winfo_reqwidth() + 60)
+            h = min(max(_px(760), content_h), screen_h - _px(120))
+            w = max(_px(680), inner.winfo_reqwidth() + _px(60))
             self.root.geometry(f"{w}x{h}")
             self.root.resizable(False, False)
         except Exception:
@@ -163,13 +203,14 @@ class SettingsWindow:
         style.configure("Section.TLabel", background=PANEL, font=("Segoe UI", 10, "bold"))
 
         header = tk.Frame(self.root, bg=PANEL)
-        header.pack(fill="x", padx=16, pady=(10, 4))
+        header.pack(fill="x", padx=_px(16), pady=(_px(10), _px(4)))
         ttk.Label(header, text="米游社自动签到器", style="Title.TLabel").pack(anchor="w")
         self.status_var = tk.StringVar(value=self.status_text or "就绪")
         ttk.Label(header, textvariable=self.status_var, style="Muted.TLabel").pack(anchor="w")
 
         nb = ttk.Notebook(self.root)
-        nb.pack(fill="both", expand=True, padx=12, pady=8)
+        self.nb = nb
+        nb.pack(fill="both", expand=True, padx=_px(12), pady=_px(8))
         self.tab_feat = tk.Frame(nb, bg=PANEL)
         self.tab_acct = tk.Frame(nb, bg=PANEL)
         self.tab_about = tk.Frame(nb, bg=PANEL)
@@ -182,22 +223,22 @@ class SettingsWindow:
         self._build_about(self.tab_about)
 
         btns = tk.Frame(self.root, bg=PANEL)
-        btns.pack(fill="x", padx=16, pady=(0, 12))
+        btns.pack(fill="x", padx=_px(16), pady=(_px(0), _px(12)))
         tk.Button(
             btns, text="立即签到", bg=ACCENT, fg="white", relief="flat",
-            font=("Segoe UI", 10, "bold"), padx=14, pady=6, command=self._run_now,
+            font=("Segoe UI", 10, "bold"), padx=_px(14), pady=_px(6), command=self._run_now,
         ).pack(side="left")
         tk.Button(
             btns, text="保存设置", bg="#111827", fg="white", relief="flat",
-            font=("Segoe UI", 10, "bold"), padx=14, pady=6, command=self._save,
-        ).pack(side="left", padx=8)
+            font=("Segoe UI", 10, "bold"), padx=_px(14), pady=_px(6), command=self._save,
+        ).pack(side="left", padx=_px(8))
         tk.Button(
             btns, text="查看日志", relief="flat", font=("Segoe UI", 10),
-            padx=10, pady=6, command=self._show_log,
+            padx=_px(10), pady=_px(6), command=self._show_log,
         ).pack(side="left")
         tk.Button(
             btns, text="关闭", relief="flat", font=("Segoe UI", 10),
-            padx=10, pady=6, command=self._on_close,
+            padx=_px(10), pady=_px(6), command=self._on_close,
         ).pack(side="right")
 
     def _make_scrollable(self, parent: tk.Frame) -> tk.Frame:
@@ -230,21 +271,21 @@ class SettingsWindow:
 
     def _build_features(self, parent: tk.Frame) -> None:
         wrap = self._make_scrollable(parent)
-        wrap.pack(fill="both", expand=True, padx=8, pady=6)
+        wrap.pack(fill="both", expand=True, padx=_px(8), pady=_px(6))
 
-        ttk.Label(wrap, text="游戏签到 · 社区打卡", style="Section.TLabel").pack(anchor="w", pady=(4, 4))
-        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=1)
+        ttk.Label(wrap, text="游戏签到 · 社区打卡", style="Section.TLabel").pack(anchor="w", pady=(_px(4), _px(4)))
+        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=_px(1))
         box.pack(fill="x")
 
         header_font = ("Segoe UI", 9, "bold")
         tk.Label(box, text="游戏 / 板块", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
-            row=0, column=0, sticky="w", padx=(12, 4), pady=(8, 2)
+            row=0, column=0, sticky="w", padx=(_px(12), _px(4)), pady=(_px(8), _px(2))
         )
         tk.Label(box, text="游戏签到", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
-            row=0, column=1, padx=14, pady=(8, 2)
+            row=0, column=1, padx=_px(14), pady=(_px(8), _px(2))
         )
         tk.Label(box, text="社区打卡", bg="#FFFFFF", fg=MUTED, font=header_font).grid(
-            row=0, column=2, padx=14, pady=(8, 2)
+            row=0, column=2, padx=_px(14), pady=(_px(8), _px(2))
         )
 
         game_flags = {
@@ -261,29 +302,29 @@ class SettingsWindow:
         selected = set(self.cfg.checkin_list)
         for i, (gid, name, game_key) in enumerate(BOARD_ROWS, start=1):
             tk.Label(box, text=name, bg="#FFFFFF", font=("Segoe UI", 10)).grid(
-                row=i, column=0, sticky="w", padx=(12, 4), pady=2
+                row=i, column=0, sticky="w", padx=(_px(12), _px(4)), pady=_px(2)
             )
             if game_key:
                 var = tk.BooleanVar(value=bool(game_flags[game_key]))
                 self._game_vars[game_key] = var
-                ttk.Checkbutton(box, variable=var).grid(row=i, column=1, padx=14, pady=2)
+                ttk.Checkbutton(box, variable=var).grid(row=i, column=1, padx=_px(14), pady=_px(2))
             else:
                 tk.Label(box, text="—", bg="#FFFFFF", fg=MUTED, font=("Segoe UI", 10)).grid(
-                    row=i, column=1, padx=14, pady=2
+                    row=i, column=1, padx=_px(14), pady=_px(2)
                 )
             bvar = tk.BooleanVar(value=gid in selected)
             self._board_vars[gid] = bvar
             cb = ttk.Checkbutton(box, variable=bvar)
-            cb.grid(row=i, column=2, padx=14, pady=2)
+            cb.grid(row=i, column=2, padx=_px(14), pady=_px(2))
             self._board_cbs[gid] = cb
-        tk.Frame(box, bg="#FFFFFF", height=8).grid(row=len(BOARD_ROWS) + 1, columnspan=3)
+        tk.Frame(box, bg="#FFFFFF", height=_px(8)).grid(row=len(BOARD_ROWS) + 1, columnspan=3)
 
-        ttk.Label(wrap, text="云游戏签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
+        ttk.Label(wrap, text="云游戏签到", style="Section.TLabel").pack(anchor="w", pady=(_px(12), _px(2)))
         cloud = tk.Frame(wrap, bg=PANEL)
         cloud.pack(fill="x")
-        ttk.Label(cloud, text="云原神").grid(row=0, column=0, sticky="w", pady=2)
-        ttk.Label(cloud, text="云星穹铁道").grid(row=1, column=0, sticky="w", pady=2)
-        ttk.Label(cloud, text="云绝区零").grid(row=2, column=0, sticky="w", pady=2)
+        ttk.Label(cloud, text="云原神").grid(row=0, column=0, sticky="w", pady=_px(2))
+        ttk.Label(cloud, text="云星穹铁道").grid(row=1, column=0, sticky="w", pady=_px(2))
+        ttk.Label(cloud, text="云绝区零").grid(row=2, column=0, sticky="w", pady=_px(2))
         self.var_cloud_genshin = tk.BooleanVar(value=self.cfg.cloud_genshin)
         self.var_cloud_sr = tk.BooleanVar(value=self.cfg.cloud_sr)
         self.var_cloud_zzz = tk.BooleanVar(value=self.cfg.cloud_zzz)
@@ -291,12 +332,12 @@ class SettingsWindow:
         ttk.Checkbutton(cloud, variable=self.var_cloud_sr).grid(row=1, column=1, sticky="w")
         ttk.Checkbutton(cloud, variable=self.var_cloud_zzz).grid(row=2, column=1, sticky="w")
 
-        ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
+        ttk.Label(wrap, text="自动定时签到", style="Section.TLabel").pack(anchor="w", pady=(_px(12), _px(2)))
         self.var_sched = tk.BooleanVar(value=self.cfg.schedule_enabled)
         ttk.Checkbutton(wrap, text="启用定时任务", variable=self.var_sched).pack(anchor="w")
 
         time_row = tk.Frame(wrap, bg=PANEL)
-        time_row.pack(fill="x", pady=6)
+        time_row.pack(fill="x", pady=_px(6))
         ttk.Label(time_row, text="每天签到时间（滚轮调整）").pack(side="left")
         first = (self.cfg.schedule_times or ["09:30"])[0]
         parsed = parse_hhmm(first) or (9, 30)
@@ -312,7 +353,7 @@ class SettingsWindow:
             textvariable=self.var_hour,
             state="readonly",
         )
-        sp_h.pack(side="left", padx=(10, 2))
+        sp_h.pack(side="left", padx=(_px(10), _px(2)))
         ttk.Label(time_row, text=":", font=("Segoe UI", 14)).pack(side="left")
         sp_m = tk.Spinbox(
             time_row,
@@ -325,18 +366,18 @@ class SettingsWindow:
             textvariable=self.var_minute,
             state="readonly",
         )
-        sp_m.pack(side="left", padx=(2, 10))
+        sp_m.pack(side="left", padx=(_px(2), _px(10)))
         _bind_wheel(sp_h, self.var_hour.get, self.var_hour.set, 0, 23)
         _bind_wheel(sp_m, self.var_minute.get, self.var_minute.set, 0, 55, "{:02d}")
 
         extra = tk.Frame(wrap, bg=PANEL)
-        extra.pack(fill="x", pady=2)
+        extra.pack(fill="x", pady=_px(2))
         ttk.Label(extra, text="随机延迟(秒)").pack(side="left")
         self.ent_delay = tk.Entry(extra, font=("Segoe UI", 10), width=6)
-        self.ent_delay.pack(side="left", padx=6)
+        self.ent_delay.pack(side="left", padx=_px(6))
         self.ent_delay.insert(0, str(self.cfg.random_delay_sec))
 
-        ttk.Label(wrap, text="启动 / 关闭", style="Section.TLabel").pack(anchor="w", pady=(12, 2))
+        ttk.Label(wrap, text="启动 / 关闭", style="Section.TLabel").pack(anchor="w", pady=(_px(12), _px(2)))
         self.var_autostart = tk.BooleanVar(value=autostart.is_enabled())
         self.var_launch_run = tk.BooleanVar(value=self.cfg.run_on_launch)
         self.var_silent = tk.BooleanVar(value=bool(self.cfg.silent_launch))
@@ -351,21 +392,21 @@ class SettingsWindow:
         ).pack(anchor="w")
 
         btns = tk.Frame(wrap, bg=PANEL)
-        btns.pack(fill="x", pady=(8, 0))
+        btns.pack(fill="x", pady=(_px(8), _px(0)))
         tk.Button(
             btns, text="最小化到托盘", relief="flat", font=("Segoe UI", 10),
-            padx=8, pady=4, command=self._minimize_to_tray,
+            padx=_px(8), pady=_px(4), command=self._minimize_to_tray,
         ).pack(side="left")
         tk.Button(
             btns, text="退出程序", relief="flat", font=("Segoe UI", 10),
-            fg="#DC2626", padx=8, pady=4, command=self._quit_app,
-        ).pack(side="left", padx=8)
+            fg="#DC2626", padx=_px(8), pady=_px(4), command=self._quit_app,
+        ).pack(side="left", padx=_px(8))
 
         ttk.Label(
             wrap,
             text=f"签到配置：{BBS_ROOT / 'config' / 'config.yaml'}",
             style="Muted.TLabel",
-        ).pack(anchor="w", pady=(10, 0))
+        ).pack(anchor="w", pady=(_px(10), _px(0)))
         self.lastrun_var = tk.StringVar(value=self._last_run_text())
         ttk.Label(wrap, textvariable=self.lastrun_var, style="Muted.TLabel").pack(anchor="w")
 
@@ -386,57 +427,57 @@ class SettingsWindow:
 
     def _build_account(self, parent: tk.Frame) -> None:
         wrap = tk.Frame(parent, bg=PANEL)
-        wrap.pack(fill="both", expand=True, padx=8, pady=6)
+        wrap.pack(fill="both", expand=True, padx=_px(8), pady=_px(6))
         ttk.Label(
             wrap,
             text="短信验证码登录；云游戏凭证在签到时自动获取。若触发图形验证会弹出窗口，请手动完成",
             style="Muted.TLabel",
-            wraplength=420,
+            wraplength=_px(420),
             justify="left",
-        ).pack(anchor="w", pady=(0, 8))
+        ).pack(anchor="w", pady=(_px(0), _px(8)))
 
         form = tk.Frame(wrap, bg=PANEL)
         form.pack(fill="x")
-        ttk.Label(form, text="手机号").grid(row=0, column=0, sticky="w", pady=3)
+        ttk.Label(form, text="手机号").grid(row=0, column=0, sticky="w", pady=_px(3))
         self.ent_account = tk.Entry(form, font=("Segoe UI", 10), width=28)
-        self.ent_account.grid(row=0, column=1, sticky="w", padx=8, pady=3)
-        ttk.Label(form, text="短信验证码").grid(row=1, column=0, sticky="w", pady=3)
+        self.ent_account.grid(row=0, column=1, sticky="w", padx=_px(8), pady=_px(3))
+        ttk.Label(form, text="短信验证码").grid(row=1, column=0, sticky="w", pady=_px(3))
         self.ent_sms = tk.Entry(form, font=("Segoe UI", 10), width=16)
-        self.ent_sms.grid(row=1, column=1, sticky="w", padx=8, pady=3)
+        self.ent_sms.grid(row=1, column=1, sticky="w", padx=_px(8), pady=_px(3))
 
         btns = tk.Frame(wrap, bg=PANEL)
-        btns.pack(fill="x", pady=10)
+        btns.pack(fill="x", pady=_px(10))
         self._btn_sms = tk.Button(
             btns, text="发送短信验证码", relief="flat", font=("Segoe UI", 10),
-            padx=8, pady=4, command=self._send_sms,
+            padx=_px(8), pady=_px(4), command=self._send_sms,
         )
         self._btn_sms.pack(side="left")
         tk.Button(
             btns, text="登录", bg=ACCENT, fg="white", relief="flat",
-            font=("Segoe UI", 10, "bold"), padx=8, pady=4, command=self._login_sms,
-        ).pack(side="left", padx=8)
+            font=("Segoe UI", 10, "bold"), padx=_px(8), pady=_px(4), command=self._login_sms,
+        ).pack(side="left", padx=_px(8))
         tk.Button(
             btns, text="退出登录并清除数据", relief="flat", font=("Segoe UI", 10),
-            fg="#DC2626", padx=8, pady=4, command=self._logout,
+            fg="#DC2626", padx=_px(8), pady=_px(4), command=self._logout,
         ).pack(side="left")
 
         self.login_var = tk.StringVar(value="")
         self.snap_var = tk.StringVar(value="")
         ttk.Label(
             wrap, textvariable=self.login_var, style="Muted.TLabel",
-            wraplength=420, justify="left",
-        ).pack(anchor="w", pady=(4, 8))
+            wraplength=_px(420), justify="left",
+        ).pack(anchor="w", pady=(_px(4), _px(8)))
 
-        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=1)
-        box.pack(fill="x", pady=4)
+        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=_px(1))
+        box.pack(fill="x", pady=_px(4))
         tk.Label(box, text="当前签到账号", bg="#FFFFFF", font=("Segoe UI", 10, "bold")).pack(
-            anchor="w", padx=10, pady=(8, 0)
+            anchor="w", padx=_px(10), pady=(_px(8), _px(0))
         )
         self.snap_label = tk.Label(
             box, textvariable=self.snap_var, bg="#FFFFFF",
             font=("Segoe UI", 10), fg=MUTED, justify="left",
         )
-        self.snap_label.pack(anchor="w", padx=10, pady=(2, 10))
+        self.snap_label.pack(anchor="w", padx=_px(10), pady=(_px(2), _px(10)))
         self._refresh_account_status()
 
         try:
@@ -501,33 +542,33 @@ class SettingsWindow:
 
     def _build_about(self, parent: tk.Frame) -> None:
         wrap = tk.Frame(parent, bg=PANEL)
-        wrap.pack(fill="both", expand=True, padx=8, pady=6)
-        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=1)
+        wrap.pack(fill="both", expand=True, padx=_px(8), pady=_px(6))
+        box = tk.Frame(wrap, bg="#FFFFFF", highlightbackground=LINE, highlightthickness=_px(1))
         box.pack(fill="both", expand=True)
         txt = tk.Text(
             box, bg="#FFFFFF", fg="#1F2937", font=("Segoe UI", 10),
-            relief="flat", padx=12, pady=12, wrap="word",
+            relief="flat", padx=_px(12), pady=_px(12), wrap="word",
         )
         txt.pack(fill="both", expand=True)
         txt.insert("1.0", ABOUT_TEXT)
         txt.configure(state="disabled")
 
         btns = tk.Frame(wrap, bg=PANEL)
-        btns.pack(fill="x", pady=8)
+        btns.pack(fill="x", pady=_px(8))
         tk.Button(
             btns, text="打开配置目录", relief="flat", font=("Segoe UI", 10),
-            padx=8, pady=4,
+            padx=_px(8), pady=_px(4),
             command=lambda: __import__("os").startfile(str(BBS_ROOT / "config")),
         ).pack(side="left")
         tk.Button(
             btns, text="打开日志", relief="flat", font=("Segoe UI", 10),
-            padx=8, pady=4,
+            padx=_px(8), pady=_px(4),
             command=lambda: (
                 __import__("os").startfile(str(__import__("app_config").LOG_PATH))
                 if __import__("app_config").LOG_PATH.exists()
                 else self._dialog("关于", "日志尚未生成")
             ),
-        ).pack(side="left", padx=8)
+        ).pack(side="left", padx=_px(8))
 
     def _post_ui(self, fn) -> None:
         self._ui_queue.put(fn)
@@ -855,12 +896,12 @@ class SettingsWindow:
             pass
 
         color = {"error": "#DC2626", "warning": "#B45309"}.get(kind, "#1F2937")
-        body = tk.Frame(win, bg=PANEL, padx=18, pady=14)
+        body = tk.Frame(win, bg=PANEL, padx=_px(18), pady=_px(14))
         body.pack(fill="both", expand=True)
         tk.Label(body, text=title, bg=PANEL, fg=color,
                  font=("Segoe UI", 10, "bold")).pack(anchor="w")
         tk.Label(body, text=message, bg=PANEL, fg="#1F2937", justify="left",
-                 wraplength=420, font=("Segoe UI", 9)).pack(anchor="w", pady=(6, 14))
+                 wraplength=_px(420), font=("Segoe UI", 9)).pack(anchor="w", pady=(_px(6), _px(14)))
         btns = tk.Frame(body, bg=PANEL)
         btns.pack(fill="x")
         result = {"ok": False}
@@ -875,18 +916,18 @@ class SettingsWindow:
 
         if ask:
             tk.Button(btns, text="取消", relief="flat", font=("Segoe UI", 10),
-                      padx=10, pady=3, command=lambda: close(False)).pack(side="right")
+                      padx=_px(10), pady=_px(3), command=lambda: close(False)).pack(side="right")
             tk.Button(btns, text="确定", relief="flat", font=("Segoe UI", 10),
-                      padx=10, pady=3, command=lambda: close(True)).pack(side="right", padx=6)
+                      padx=_px(10), pady=_px(3), command=lambda: close(True)).pack(side="right", padx=_px(6))
         else:
             tk.Button(btns, text="确定", relief="flat", font=("Segoe UI", 10),
-                      padx=10, pady=3, command=lambda: close(True)).pack(side="right")
+                      padx=_px(10), pady=_px(3), command=lambda: close(True)).pack(side="right")
 
         win.bind("<Return>", lambda e: close(True))
         win.bind("<Escape>", lambda e: close(False))
         win.protocol("WM_DELETE_WINDOW", lambda: close(not ask))
         win.update_idletasks()
-        w = max(360, min(520, win.winfo_reqwidth()))
+        w = max(_px(360), min(_px(520), win.winfo_reqwidth()))
         h = win.winfo_reqheight()
         win.geometry(self._centered_geometry(win, w, h))
         win.update_idletasks()
@@ -930,7 +971,7 @@ class SettingsWindow:
         win = tk.Toplevel(self.root)
         win.title("运行日志")
         self._apply_window_icon(win)
-        win.geometry(self._centered_geometry(win, 640, 420))
+        win.geometry(self._centered_geometry(win, _px(640), _px(420)))
         txt = tk.Text(win, wrap="none", font=("Consolas", 10))
         txt.pack(fill="both", expand=True)
         txt.insert("1.0", read_log_tail(120))
@@ -1011,6 +1052,7 @@ class SettingsWindow:
             pass
         if self._show_flag:
             self.show_now()
+        self._watch_dpi()
 
     def destroy(self) -> None:
         self._stop_waiting()
