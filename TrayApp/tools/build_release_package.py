@@ -20,6 +20,23 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
 
 
+def patch_runtime_pth(stage: Path) -> None:
+    """确保内置运行时的 ._pth 包含引擎目录（隔离模式下脚本目录不入 sys.path）。"""
+    pth = stage / "runtime" / "python313._pth"
+    if not pth.exists():
+        return
+    try:
+        lines = [l for l in pth.read_text(encoding="ascii").splitlines() if l.strip()]
+    except Exception:
+        return
+    keep = [l for l in lines if l.strip() != "import site"]
+    if not any("MihoyoBBSTools" in l for l in keep):
+        keep.append("..\\engine\\MihoyoBBSTools")
+    keep.append("import site")
+    pth.write_text("\n".join(keep) + "\n", encoding="ascii")
+    print("runtime ._pth:", keep)
+
+
 def main() -> None:
     # refresh TrayApp sources in publish tree
     for name in [
@@ -92,6 +109,8 @@ def main() -> None:
     sys.path.insert(0, str(TRAY / "tools"))
     from bundle_runtime import bundle
     bundle(STAGE)
+    # 嵌入式 Python 的 ._pth 若不含引擎目录，引擎 import 同级模块会失败（隔离模式）
+    patch_runtime_pth(STAGE)
     # docs / licenses
     for name in ["README.md", "LICENSE", "SECURITY.md"]:
         shutil.copy2(PUB / name, STAGE / name)

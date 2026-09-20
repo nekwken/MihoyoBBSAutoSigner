@@ -17,3 +17,7 @@ assets/icon_source.png
 release/
 dist/
 show_request.flag
+
+# Mimosa hook state (local only)
+.mimosa/
+TrayApp/.mimosa/

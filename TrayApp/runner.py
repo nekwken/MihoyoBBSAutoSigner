@@ -473,9 +473,18 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     _log("开始签到子进程…")
+    # 内置运行时（嵌入式 Python）处于隔离模式，脚本目录不会进入 sys.path，
+    # 因此显式插入引擎目录后再执行 main.py，避免 import 同级模块失败
+    boot = (
+        "import runpy, sys; "
+        f"sys.path.insert(0, {str(BBS_ROOT)!r}); "
+        f"sys.argv = [{str(main_py)!r}]; "
+        f"runpy.run_path({str(main_py)!r}, run_name='__main__')"
+    )
+    cmd = [python, "-c", boot] if " " not in python else [python, str(main_py)]
     try:
         proc = subprocess.run(
-            [python, str(main_py)],
+            cmd,
             cwd=str(BBS_ROOT),
             capture_output=True,
             text=True,
