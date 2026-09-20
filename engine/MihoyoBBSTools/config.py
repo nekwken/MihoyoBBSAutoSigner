@@ -2,6 +2,7 @@ import collections
 import os
 import yaml
 from copy import deepcopy
+from pathlib import Path
 
 from loghelper import log
 
@@ -140,19 +141,24 @@ def save_config(p_path=None, p_config=None):
         return None
     if not p_path:
         p_path = config_Path
+    # 只允许写入配置文件所在目录，避免路径被拼成任意位置
+    p_path = os.path.abspath(str(p_path))
+    if os.path.dirname(p_path) != os.path.abspath(os.path.dirname(config_Path)):
+        log.error(f"拒绝写入配置目录之外的路径：{p_path}")
+        return None
     if not p_config:
         p_config = config
-    with open(p_path, "w+") as f:
-        try:
-            f.seek(0)
-            f.truncate()
-            f.write(yaml.dump(p_config, Dumper=yaml.Dumper, sort_keys=False))
-            f.flush()
-        except OSError:
-            serverless = True
-            log.info("Cookie 保存失败")
-        else:
-            log.info("Config 保存完毕")
+    try:
+        # 路径已在上方限定为配置目录内
+        Path(p_path).write_text(
+            yaml.dump(p_config, Dumper=yaml.Dumper, sort_keys=False),
+            encoding="utf-8",
+        )
+    except OSError:
+        serverless = True
+        log.info("Cookie 保存失败")
+    else:
+        log.info("Config 保存完毕")
 
 
 def clear_stoken():
