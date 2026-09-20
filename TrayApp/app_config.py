@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "1.2.1"
+APP_VERSION = "2.0.0-beta"
 
 
 def _exe_or_file_dir() -> Path:
@@ -129,15 +129,15 @@ def engine_config_path(create: bool = True) -> Path:
 
 # 统一勾选表：每个板块一行；game_key 为 None 表示该板块没有独立的游戏签到
 BOARD_ROWS = [
+    (3, "崩坏学院2", "honkai2"),
     (1, "崩坏3", "honkai3rd"),
     (2, "原神", "genshin"),
-    (3, "崩坏2", "honkai2"),
-    (4, "未定事件簿", "tears"),
-    (5, "大别野", None),
     (6, "崩坏：星穹铁道", "honkai_sr"),
     (8, "绝区零", "zzz"),
+    (4, "未定事件簿", "tears"),
     (9, "因缘精灵", None),
     (10, "星布谷地", None),
+    (5, "大别野", None),
 ]
 
 DEFAULT = {
@@ -163,7 +163,10 @@ DEFAULT = {
     "cloud_zzz_token": "",
     "cloud_sr_token": "",
     "account_nickname": "",
+    "board_order": [],
+    "board_hidden": [],
     "account_stuid": "",
+    "ui_theme": "system",
     "device_id": "",
     "device_fp": "",
     "last_run": "",
@@ -196,7 +199,10 @@ class TrayConfig:
     cloud_zzz_token: str = ""
     cloud_sr_token: str = ""
     account_nickname: str = ""
+    board_order: list[int] = field(default_factory=list)
+    board_hidden: list[int] = field(default_factory=list)
     account_stuid: str = ""
+    ui_theme: str = "system"
     device_id: str = ""
     device_fp: str = ""
     last_run: str = ""

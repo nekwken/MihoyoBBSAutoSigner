@@ -54,6 +54,9 @@ def main() -> None:
         "stoken_login.py",
         "scheduler.py",
         "autostart.py",
+        "dpi.py",
+        "theme.py",
+        "widgets.py",
         "requirements.txt",
         "build.ps1",
     ]:
