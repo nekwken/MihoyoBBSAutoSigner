@@ -370,7 +370,7 @@ class SettingsWindow:
         ttk.Label(wrap, textvariable=self.lastrun_var, style="Muted.TLabel").pack(anchor="w")
 
     def _last_run_text(self) -> str:
-        last = self.cfg.last_run or "从未"
+        last = (self.cfg.last_run or "").replace("T", " ")[:16] or "从未"
         status = self.cfg.last_status or ""
         return f"上次运行：{last}    结果：{status}" if status else f"上次运行：{last}"
 

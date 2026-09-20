@@ -16,19 +16,33 @@
   <img src="docs/assets/ui-settings.png" alt="settings window" width="420" />
 </p>
 
+<p align="center">
+  <img src="docs/assets/ui-account.png" alt="account window" width="420" />
+</p>
+
 > **个人学习与自用。请遵守米哈游用户协议与当地法律。。非官方项目。**
 
 ## 功能
 
 - 托盘常驻；双击打开设置；可配置关闭时最小化到托盘
-- 社区打卡 / 米游币（看帖、点赞、分享可选）
-- 游戏签到：原神、星穹铁道、绝区零、崩坏2/3、未定等
-- 社区板块勾选；滚轮调整每日签到时间
-- 短信验证码登录一站式自动获取 Stoken
+- 社区打卡（米游币规则见下）
+- 游戏签到：原神、星穹铁道、绝区零、崩坏2/3、未定事件簿
+- 云游戏签到：云原神、云星穹铁道、云绝区零（凭证自动获取，无需手动抓包）
+- 定时签到：到点后当天还没签成功会自动补签；当天签成功不重复执行；失败会自动重试
+- 开机自启动；静默启动（勾选后启动不弹窗，再双击一次程序即可打开窗口）
+- 短信验证码登录；登录后自动获取云游戏凭证
+- 账号区显示 UID 与米游社昵称
+- 首次运行自动生成配置文件，无需手动复制
+
+## 米游币说明（2026-09 现状）
+
+- 米游币现在**只有社区打卡**发放：首日 30 枚，连续签到递增（最高 40 枚/天）
+- 点赞（2025-12）、分享（2026-03）、看帖（2026-03）的米游币奖励均已下线，因此本工具已移除点赞与分享
+- 拿满当日米游币只需完成社区打卡
 
 ## 下载
 
-请到 [Releases](https://github.com/nekwken/MihoyoBBSAutoSigner/releases) 下载完整包（含编译好的 exe 与引擎）。
+请到 [Releases](https://github.com/nekwken/MihoyoBBSAutoSigner/releases) 下载完整包（含编译好的 exe、引擎与内置运行环境）。
 
 解压后运行：
 
@@ -36,16 +50,16 @@
 MihoyoBBSAutoSigner/
 ├── MihoyoBBSAutoSigner.exe    # 托盘程序
 ├── engine/MihoyoBBSTools/     # 签到引擎
+├── runtime/                   # 内置 Python 运行时（免安装）
 ├── README.md
 └── LICENSE
 ```
 
 首次使用：
 
-1. 将 `engine/MihoyoBBSTools/config/config.yaml.example` 复制为同目录 `config.yaml`
-2. 运行 `MihoyoBBSAutoSigner.exe`
-3. 设置 →「账号 / Stoken」短信登录
-4. 勾选功能与板块 → 保存 → 立即签到 / 等待定时
+1. 运行 `MihoyoBBSAutoSigner.exe`（首次会自动生成 `engine/MihoyoBBSTools/config/config.yaml`）
+2. 托盘图标 → 设置 → 「账号」页短信登录
+3. 「功能」页勾选游戏签到 / 社区打卡 / 云游戏签到 → 保存 → 立即签到或等待定时
 
 ## 从源码运行
 
@@ -53,8 +67,6 @@ MihoyoBBSAutoSigner/
 cd TrayApp
 pip install -r requirements.txt
 pip install -r ../engine/MihoyoBBSTools/requirements.txt
-copy ..\engine\MihoyoBBSTools\config\config.yaml.example `
-     ..\engine\MihoyoBBSTools\config\config.yaml
 python main.py
 ```
 
