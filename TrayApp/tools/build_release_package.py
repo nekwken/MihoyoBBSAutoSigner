@@ -11,8 +11,10 @@ PUB = ROOT / "publish" / "MihoyoBBSAutoSigner"
 TRAY = ROOT / "TrayApp"
 PY = r"C:\Users\nekwken\AppData\Local\Programs\Python\Python313\python.exe"
 DIST = PUB / "dist"
-STAGE = PUB / "release" / "MihoyoBBSAutoSigner"
-ZIP_PATH = PUB / "release" / "MihoyoBBSAutoSigner-win64.zip"
+# 构建产物放到仓库外：内置运行时含第三方库，留在仓库树里既臃肿又会被安全扫描误报
+OUT = ROOT / "out"
+STAGE = OUT / "MihoyoBBSAutoSigner"
+ZIP_PATH = OUT / "MihoyoBBSAutoSigner-win64.zip"
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
