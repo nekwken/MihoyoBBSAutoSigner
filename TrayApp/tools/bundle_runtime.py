@@ -42,8 +42,11 @@ def bundle(stage: Path) -> Path:
 
     py = runtime / "python.exe"
     get_pip = download(GET_PIP_URL, CACHE / "get-pip.py")
-    subprocess.run([str(py), str(get_pip), "--no-warn-script-location", "-q"], check=True)
-    subprocess.run([str(py), "-m", "pip", "install", "--no-warn-script-location", "-q", *DEPS], check=True)
+    # 参数列表调用（不经 shell），参数均为本地固定路径与包名
+    subprocess.run([str(py), str(get_pip), "--no-warn-script-location", "-q"],
+                   check=True, shell=False)
+    subprocess.run([str(py), "-m", "pip", "install", "--no-warn-script-location", "-q", *DEPS],
+                   check=True, shell=False)
 
     probe = subprocess.run(
         [str(py), "-c", "import yaml, httpx, requests; print('bundled runtime ok')"],
