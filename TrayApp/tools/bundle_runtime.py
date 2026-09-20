@@ -56,8 +56,3 @@ def bundle(stage: Path) -> Path:
         raise SystemExit(f"bundled runtime probe failed:\n{probe.stdout}\n{probe.stderr}")
     print(probe.stdout.strip())
     return runtime
-
-
-if __name__ == "__main__":
-    import sys
-    bundle(Path(sys.argv[1]))

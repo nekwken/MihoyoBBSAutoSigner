@@ -11,6 +11,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Event, Thread
+import urllib.parse
 from typing import Any
 
 try:
@@ -24,6 +25,8 @@ GT4_URLS = [
     "https://static.geetest.com/v4/gt4.js",
     "https://static.geetest.com/v4/gt4.js?v=1",
 ]
+
+GT4_HOSTS = {"static.geetest.com"}  # 允许下载验证组件的主机白名单
 
 GT4_CACHE = ""
 
@@ -77,6 +80,9 @@ def _load_gt4_js() -> str:
 
         for url in GT4_URLS:
             try:
+                host = urllib.parse.urlparse(url).hostname or ""
+                if urllib.parse.urlparse(url).scheme != "https" or host not in GT4_HOSTS:
+                    continue  # 仅允许白名单主机，避免被替换成任意地址
                 r = httpx.get(url, timeout=20, follow_redirects=True)
                 if r.status_code == 200 and len(r.content) > 1000:
                     text = r.text

@@ -43,12 +43,17 @@ config = {
 config_raw = deepcopy(config)
 
 path = os.path.dirname(os.path.realpath(__file__)) + "/config"
-if os.getenv("AutoMihoyoBBS_config_path") is not None:
-    path = os.getenv("AutoMihoyoBBS_config_path")
-config_prefix = os.getenv("AutoMihoyoBBS_config_prefix")
-if config_prefix is None:
+_env_path = os.getenv("AutoMihoyoBBS_config_path")
+if _env_path:
+    # 仅接受绝对路径，避免相对/可疑路径被拼接进来
+    _env_path = os.path.abspath(os.path.expanduser(_env_path))
+    if os.path.isabs(_env_path):
+        path = _env_path
+config_prefix = os.getenv("AutoMihoyoBBS_config_prefix") or ""
+# 前缀只允许字母/数字/下划线/短横线，杜绝「../」之类的路径穿越
+if config_prefix and not all(c.isalnum() or c in "_-" for c in config_prefix):
     config_prefix = ""
-config_Path = f"{path}/{config_prefix}config.yaml"
+config_Path = os.path.join(path, f"{config_prefix}config.yaml")
 
 
 def copy_config():
