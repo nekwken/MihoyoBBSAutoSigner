@@ -285,11 +285,34 @@ def set_rounded_corners(tk_root, enable: bool = True) -> None:
         pass
 
 
+def disable_dwm_transitions(tk_root) -> bool:
+    """关掉系统对这个窗口的过渡动画（DWMWA_TRANSITIONS_FORCEDISABLED，属性号 3）。
+
+    官方原文：Enables or forcibly disables DWM transitions. TRUE to disable transitions.
+    用途：应用主动改窗口尺寸（切换缩放档位）时，DWM 自己的淡入/形变动画会和我们的
+    「冻结快照 → 一次切换」叠在一起，看起来就是多出来的一层动效；关掉它之后，
+    缩放期间屏幕内容完全由应用决定，观感才可控。
+    """
+    if sys.platform != "win32":
+        return False
+    hwnd = _hwnd(tk_root)
+    if not hwnd:
+        return False
+    try:
+        value = ctypes.c_int(1)          # TRUE = 禁用过渡
+        rc = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, 3, ctypes.byref(value), ctypes.sizeof(value))
+        return rc == 0
+    except Exception:
+        return False
+
+
 def apply_window_style(tk_root, mica: bool = False) -> None:
     """统一入口：圆角 + 标题栏深浅与配色（所有窗口）+ Mica（仅主窗口）。"""
     set_rounded_corners(tk_root)
     set_dark_titlebar(tk_root)
     set_caption_color(tk_root)
+    disable_dwm_transitions(tk_root)     # 缩放观感可控：不让 DWM 叠加自己的过渡动画
     if mica:
         apply_mica(tk_root)
     refresh_frame(tk_root)

@@ -18,7 +18,7 @@ ZIP_PATH = OUT / "MihoyoBBSAutoSigner-win64.zip"
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> None:
-    print("+", " ".join(cmd))
+    print("+", cmd)                      # 直接打印参数列表，不拼命令字符串
     subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
 
 

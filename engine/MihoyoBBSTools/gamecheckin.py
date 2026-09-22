@@ -130,7 +130,7 @@ class GameCheckin:
         return_data = f"{self.game_name}: "
         if not self.account_list:
             log.warning(f"账号没有绑定任何{self.game_name}账号！")
-            return_data += f"\n并没有绑定任何{self.game_name}账号"
+            return_data += f"\n并没有绑定任何{self.game_name}账号（可能是登录凭证无效，或该角色未绑定米游社）"
             return return_data
         for account in self.account_list:
             if account[1] in config.config["games"]["cn"][self.game_mid]["black_list"]:

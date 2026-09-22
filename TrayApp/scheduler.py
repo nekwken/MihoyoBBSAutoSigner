@@ -41,6 +41,15 @@ def next_run_time(cfg: TrayConfig, now: datetime | None = None) -> datetime | No
 
 # 补签策略：当天到点后只要还没签过，何时启动/唤醒都会补跑一次（仅限当日）
 
+# 「当天已签成功」的兜底判据（见 Scheduler._ran_today）
+SUCCESS_HINTS = (
+    "今日已签到",
+    "签到成功",
+    "今日任务已完成",
+    "已签到/任务已完成",
+    "全部完成",
+)
+
 
 class Scheduler(threading.Thread):
     def __init__(
@@ -81,7 +90,15 @@ class Scheduler(threading.Thread):
     def _ran_today(self, cfg: TrayConfig, today: str) -> bool:
         """当天是否已成功签到（失败不算，便于当天稍后自动重试）。"""
         stamp = getattr(cfg, "last_ok_run", "") or ""
-        return bool(stamp) and stamp[:10] == today
+        if stamp and stamp[:10] == today:
+            return True
+        # 兜底：某些路径（旧版本保存覆盖、部分失败）没写 last_ok_run，
+        # 但当天最后一次运行本身就是成功的，也算已签，避免重启就补签
+        last_run = getattr(cfg, "last_run", "") or ""
+        status = getattr(cfg, "last_status", "") or ""
+        if last_run[:10] == today and any(hint in status for hint in SUCCESS_HINTS):
+            return True
+        return False
 
     def _tick(self) -> None:
         # 签到执行期间不干预：既不覆盖「签到中…」状态，也不重复触发

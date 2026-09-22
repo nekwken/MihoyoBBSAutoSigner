@@ -105,7 +105,10 @@ class Mihoyobbs:
             return
         log.info("正在签到......")
         header = self.headers.copy()
+        captcha_blocked = False
         for forum in self.bbs_list:
+            if captcha_blocked:
+                break
             challenge = None
             for retry_count in range(2):
                 # 真机 body 为紧凑 JSON；DS2 的 b= 必须与发送字节一致
@@ -115,10 +118,19 @@ class Mihoyobbs:
                 log.debug(req.text)
                 data = req.json()
                 if data["retcode"] == 1034:
-                    log.warning("社区签到触发验证码")
                     challenge = self.get_pass_challenge()
                     if challenge is not None:
                         header["x-rpc-challenge"] = challenge
+                    else:
+                        # 本工程按约定不自动过验证码（captcha.bbs_captcha 恒返回 None），
+                        # 所以这里没必要继续：原来每个板块都重试 2 次、每次还调一遍
+                        # get_pass_challenge()（内部 2 个请求）—— 4 个板块就是 ~16 个
+                        # 无用请求，只会加重风控。改为只提示一次并停止后续板块。
+                        log.warning(
+                            "社区签到触发验证码，本次社区签到未完成（游戏签到不受影响）。"
+                            "请在米游社 App 里手动完成一次社区签到，或过一会儿再运行一次。")
+                        captcha_blocked = True
+                        break
                 elif "err" not in data["message"] and data["retcode"] == 0:
                     log.info(str(forum["name"] + data["message"]))
                     wait()

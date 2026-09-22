@@ -38,6 +38,8 @@ FAIL_MARKERS = (
     "登录失效",
     "请重新设置 cookie",
     "请重新抓取",
+    "并没有绑定任何",
+    "账号没有绑定任何",
     "Traceback (most recent call last)",
     "UnboundLocalError",
 )
@@ -113,34 +115,9 @@ def _deps_ok(parts: list[str]) -> bool:
 
 
 def _account_snapshot() -> dict:
-    path = _bbs_config_path()
-    empty = {
-        "logged_in": False,
-        "stuid": "",
-        "mid": "",
-        "stoken_set": False,
-        "error": "未找到 config.yaml",
-    }
-    if not path.exists() or yaml is None:
-        return empty
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception as e:
-        empty["error"] = f"读取失败：{e}"
-        return empty
-    acc = data.get("account") or {}
-    stoken = str(acc.get("stoken") or "").strip()
-    stuid = str(acc.get("stuid") or "").strip()
-    mid = str(acc.get("mid") or "").strip()
-    cookie = str(acc.get("cookie") or "")
-    return {
-        "logged_in": bool(stoken) and stoken not in ("StokenError", "CookieError") and bool(stuid or mid),
-        "stuid": stuid,
-        "mid": mid,
-        "stoken_set": bool(stoken) and stoken not in ("StokenError", "CookieError"),
-        "cookie_has_uid": any(k in cookie for k in ("ltuid=", "account_id=", "stuid=")),
-        "error": "",
-    }
+    """与设置页共用 account_store 的登录态判定，避免两套逻辑各说各话。"""
+    from account_store import load_account_info
+    return load_account_info()
 
 
 def _account_logged_in() -> bool:
@@ -243,6 +220,10 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
             result_line = line
             break
 
+    # 登录有效但查不到角色：比 RESULT: PARTIAL 更具体，优先展示
+    if "并没有绑定任何" in text or "账号没有绑定任何" in text:
+        return False, "未查询到已绑定的游戏角色。请确认米哈游账号已绑定对应游戏，或在「账号」页重新登录"
+
     if result_line:
         if "RESULT: SUCCESS" in result_line:
             if "已签到" in result_line or "已完成" in result_line:
@@ -260,6 +241,8 @@ def summarize_run(returncode: int, out: str) -> tuple[bool, str]:
                 return False, "未登录或登录状态失效，请在账号页重新登录"
             if "Stoken" in detail:
                 return False, "登录状态无效，请在账号页重新登录"
+            if "绑定" in detail:
+                return False, "未查询到已绑定的游戏角色。请确认米哈游账号已绑定对应游戏，或在「账号」页重新登录"
             detail = detail.strip()
             if not detail or detail.endswith(":") or detail.endswith("："):
                 return False, "签到未完成，请查看日志"
@@ -431,12 +414,18 @@ def run_checkin(cfg: TrayConfig | None = None) -> tuple[bool, str]:
 
     snap = _account_snapshot()
     _log(
-        f"account snapshot logged_in={snap.get('logged_in')} "
+        f"account snapshot path={snap.get('path')!r} "
+        f"logged_in={snap.get('logged_in')} "
         f"stuid={snap.get('stuid')!r} mid={snap.get('mid')!r} "
-        f"stoken_set={snap.get('stoken_set')} cookie_has_uid={snap.get('cookie_has_uid')}"
+        f"stoken_set={snap.get('stoken_set')} cookie_has_uid={snap.get('cookie_has_uid')} "
+        f"cookie_ok={snap.get('cookie_ok')} reason={snap.get('reason')!r} error={snap.get('error')!r}"
     )
     if not snap.get("logged_in"):
-        msg = "未登录，请先在「账号」页短信登录"
+        msg = (
+            snap.get("reason")
+            or snap.get("error")
+            or "未登录，请先在「账号」页短信登录"
+        )
         _log(msg)
         cfg.last_run = datetime.now().isoformat(timespec="seconds")
         cfg.last_status = msg

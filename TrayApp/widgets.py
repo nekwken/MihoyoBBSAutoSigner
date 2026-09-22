@@ -7,15 +7,15 @@ import time
 import tkinter as tk
 
 import theme as _theme
-from dpi import density as _density, px as _px
+from dpi import logical_scale as _logical_scale, px as _px
 
 FONT_FAMILY = "Microsoft YaHei UI"
 
 
 def ui_font(size: float, weight: str | None = None) -> tuple:
-    """密度感知的字体（单位是点，Tk 会再按 DPI 放大；Tk 只吃整数）。"""
+    """密度与用户缩放感知的字体（单位是点，Tk 会再按 DPI 放大；Tk 只吃整数）。"""
     try:
-        size = max(7, int(round(float(size) * _density())))
+        size = max(7, int(round(float(size) * _logical_scale())))
     except Exception:
         pass
     return (FONT_FAMILY, size, weight) if weight else (FONT_FAMILY, size)
@@ -278,13 +278,6 @@ def _hex_rgb(color: str) -> tuple:
     except Exception:
         pass
     return (128, 128, 128)
-
-
-def _blend(c1: str, c2: str, t: float) -> str:
-    """按比例混合两个 #RRGGBB 颜色（解析失败时按 t 取其一）。"""
-    a, b = _hex_rgb(c1), _hex_rgb(c2)
-    k = max(0.0, min(1.0, float(t)))
-    return "#%02x%02x%02x" % tuple(round(a[i] + (b[i] - a[i]) * k) for i in range(3))
 
 
 class timer_precision:
@@ -559,7 +552,10 @@ class SlimScrollbar(tk.Canvas):
         if photo is None or not self.winfo_exists():
             return
         self._photo = photo                          # 必须持有引用，否则图片会被回收
-        self.create_image((self._bar_w - bar_w) / 2, top, anchor="nw", image=photo)
+        try:
+            self.create_image((self._bar_w - bar_w) / 2, top, anchor="nw", image=photo)
+        except Exception:                            # 图片属于别的解释器/已失效
+            self._photo = None
 
     # ── 交互 ─────────────────────────────────────────────────────────────
     def _on_press(self, event) -> None:
@@ -917,6 +913,114 @@ class RoundedSelect(tk.Canvas):
                 except Exception:
                     pass
         self.close()   # 点中选项或点在弹层外，都收起
+
+
+class ProgressPill(tk.Canvas):
+    """不定量进度条（Fluent 风格）：圆角轨道里一段圆角高光来回滑动。
+
+    Tk 画布的圆角没有抗锯齿，所以轨道与高光都用 PIL 画好再贴图（同 PillSwitch）。
+    """
+
+    HEIGHT = 6
+    TICK_MS = 16
+    STEP = 0.028          # 每 tick 前进的轨道比例
+
+    def __init__(self, master, bg: str, width: int = 300, height: int | None = None) -> None:
+        self._pw = _px(width)
+        self._ph = _px(height or self.HEIGHT)
+        self._bg = bg
+        super().__init__(master, width=self._pw, height=self._ph, bd=0,
+                         highlightthickness=0, bg=bg, takefocus=0)
+        self._pos = -0.4
+        self._job = None
+        self._precision = None
+        self._track_img = None
+        self._knob_img = None
+        self._track_item = None
+        self._knob_item = None
+        self._track_w = 0
+
+    # ── 动画 ─────────────────────────────────────────────────────────────
+    def start(self) -> None:
+        if self._job is not None or not self.winfo_exists():
+            return
+        if self._precision is None:
+            self._precision = timer_precision(1)      # 否则 16ms tick 会被拖到 23ms
+            self._precision.__enter__()
+        self._draw()
+        self._job = self.after(self.TICK_MS, self._tick)
+
+    def stop(self) -> None:
+        if self._job is not None:
+            try:
+                self.after_cancel(self._job)
+            except Exception:
+                pass
+            self._job = None
+        if self._precision is not None:
+            self._precision.__exit__(None, None, None)
+            self._precision = None
+
+    def _tick(self) -> None:
+        self._job = None
+        if not self.winfo_exists():
+            self.stop()
+            return
+        self._pos += self.STEP
+        if self._pos > 1.4:
+            self._pos = -0.4
+        self._draw()
+        self._job = self.after(self.TICK_MS, self._tick)
+
+    # ── 绘制 ─────────────────────────────────────────────────────────────
+    def _draw(self) -> None:
+        if not self.winfo_exists():
+            return
+        p = _theme.palette()
+        w = max(1, self.winfo_width() or self._pw)
+        h = self._ph
+        if self._track_item is None or self._track_w != w:
+            img = _cached_photo(("track", w, h, p["card"], p["line"]),
+                                lambda: _track_photo(w, h, p["card"], p["line"]))
+            if img is None:
+                return
+            self._track_img = img
+            self._track_w = w
+            if self._track_item is None:
+                self._track_item = self.create_image(0, 0, anchor="nw", image=img)
+            else:
+                self.itemconfigure(self._track_item, image=img)
+        span = max(int(w * 0.3), _px(36))
+        x0 = int(self._pos * w)
+        x1 = x0 + span
+        if x1 < 0 or x0 > w:                      # 高光完全在轨道外
+            if self._knob_item is not None:
+                self.itemconfigure(self._knob_item, state="hidden")
+            return
+        cx0, cx1 = max(0, x0), min(w, x1)
+        img = rounded_photo(max(2, cx1 - cx0), h, p["accent"])
+        if img is None:
+            return
+        self._knob_img = img
+        if self._knob_item is None:
+            self._knob_item = self.create_image(cx0, 0, anchor="nw", image=img)
+        else:
+            self.coords(self._knob_item, cx0, 0)
+            self.itemconfigure(self._knob_item, image=img, state="normal")
+
+
+def _track_photo(w: int, h: int, card: str, line: str):
+    """进度条轨道：卡片色底 + 1px 描边的圆角长条（PIL 抗锯齿）。"""
+    from PIL import Image, ImageDraw, ImageTk
+    scale = 4
+    W, H = max(1, w) * scale, max(1, h) * scale
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    radius = (H - 1) / 2
+    d.rounded_rectangle((0, 0, W - 1, H - 1), radius=radius,
+                        fill=_hex_rgb(card) + (255,),
+                        outline=_hex_rgb(line) + (255,), width=scale)
+    return ImageTk.PhotoImage(img.resize((w, h), Image.LANCZOS))
 
 
 class ScrollPage(tk.Frame):

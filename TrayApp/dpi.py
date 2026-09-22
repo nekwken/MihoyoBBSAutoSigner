@@ -11,6 +11,7 @@ import sys
 
 _SCALE = 1.0
 _DENSITY = 1.0               # 排版密度：小屏/高缩放下整体收紧（1.0 = 设计稿原尺寸）
+_USER_SCALE = 1.0            # 用户缩放（拖动窗口等比缩放 / 「界面缩放」选项）
 _PER_MONITOR_AWARE_V2 = -4
 
 
@@ -80,45 +81,68 @@ class _MONITORINFO(ctypes.Structure):
                 ("rcWork", _RECT), ("dwFlags", ctypes.c_ulong)]
 
 
-def monitor_dpi(tk_root) -> tuple[int, float]:
-    """最邻近显示器的 (DPI, 窗口落在该显示器内的面积占比)。
+_MONITORENUMPROC = ctypes.WINFUNCTYPE(
+    ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(_RECT), ctypes.c_void_p)
 
-    窗口横跨两块缩放比例不同的显示器时，Windows 的「按面积判定」会让 DPI 随窗口
-    尺寸变化来回跳；调用方据此（占比不足则不动）避免反复重排。
+
+def _monitor_dpi(hmon) -> int:
+    try:
+        x, y = ctypes.c_uint(), ctypes.c_uint()
+        ctypes.windll.shcore.GetDpiForMonitor(hmon, 0, ctypes.byref(x), ctypes.byref(y))
+        return int(x.value)
+    except Exception:
+        return 0
+
+
+def _intersects(win: "_RECT", mon: "_RECT") -> bool:
+    return (min(win.right, mon.right) > max(win.left, mon.left)
+            and min(win.bottom, mon.bottom) > max(win.top, mon.top))
+
+
+def _straddles_monitors(hwnd, nearest_dpi: int) -> bool:
+    """窗口是否同时压在两块 **DPI 不同** 的显示器上。
+
+    只压一块（哪怕被屏幕边缘裁掉一截）不算跨屏 —— 被裁掉时仍需按该显示器重排，
+    否则窗口会比屏幕还大却一直不调整。
+    """
+    try:
+        user32 = ctypes.windll.user32
+        win = _RECT()
+        if not user32.GetWindowRect(hwnd, ctypes.byref(win)):
+            return False
+        found = []
+
+        def _cb(hmon, _hdc, _rect, _data):
+            info = _MONITORINFO()
+            info.cbSize = ctypes.sizeof(_MONITORINFO)
+            if user32.GetMonitorInfoW(hmon, ctypes.byref(info)) and _intersects(win, info.rcMonitor):
+                found.append(_monitor_dpi(hmon) or nearest_dpi)
+            return 1
+
+        user32.EnumDisplayMonitors(None, None, _MONITORENUMPROC(_cb), None)
+        return len({d for d in found}) > 1
+    except Exception:
+        return False
+
+
+def monitor_dpi(tk_root) -> tuple[int, bool]:
+    """窗口的 (DPI, 是否横跨两块 DPI 不同的显示器)。
+
+    横跨时不动：Windows 按「面积占比」判定窗口归属，重排会改变窗口尺寸、衬得 DPI
+    来回跳，反复重排直到界面卡死（实测过）。只压一块显示器（含被边缘裁掉）则正常重排。
     """
     if sys.platform != "win32":
-        return 0, 1.0
+        return 0, False
     try:
         user32 = ctypes.windll.user32
         hwnd = user32.GetAncestor(tk_root.winfo_id(), 2) or tk_root.winfo_id()  # GA_ROOT
         hmon = user32.MonitorFromWindow(hwnd, 2)  # MONITOR_DEFAULTTONEAREST
         if not hmon:
-            return 0, 1.0
-        info = _MONITORINFO()
-        info.cbSize = ctypes.sizeof(_MONITORINFO)
-        if not user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
-            return 0, 1.0
-        dpi = 0
-        try:
-            x, y = ctypes.c_uint(), ctypes.c_uint()
-            ctypes.windll.shcore.GetDpiForMonitor(hmon, 0, ctypes.byref(x), ctypes.byref(y))
-            dpi = int(x.value)
-        except Exception:
-            dpi = 0
-        if not dpi:
-            dpi = int(user32.GetDpiForWindow(hwnd) or 0)
-        win = _RECT()
-        if not user32.GetWindowRect(hwnd, ctypes.byref(win)):
-            return dpi, 1.0
-        mon = info.rcMonitor
-        w = max(0, win.right - win.left)
-        h = max(0, win.bottom - win.top)
-        iw = max(0, min(win.right, mon.right) - max(win.left, mon.left))
-        ih = max(0, min(win.bottom, mon.bottom) - max(win.top, mon.top))
-        area = w * h
-        return dpi, (iw * ih / area if area else 1.0)
+            return 0, False
+        dpi = _monitor_dpi(hmon) or int(user32.GetDpiForWindow(hwnd) or 0)
+        return dpi, _straddles_monitors(hwnd, dpi)
     except Exception:
-        return 0, 1.0
+        return 0, False
 
 
 def monitor_work_area(tk_root) -> tuple[int, int]:
@@ -180,8 +204,30 @@ def density() -> float:
 
 
 def design_scale() -> float:
-    """设计稿像素 → 实际像素的总系数（DPI 缩放 × 排版密度）。"""
-    return _SCALE * _DENSITY
+    """设计稿像素 → 实际像素的总系数（DPI 缩放 × 排版密度 × 用户缩放）。"""
+    return _SCALE * _DENSITY * _USER_SCALE
+
+
+def logical_scale() -> float:
+    """字号要用的系数：排版密度 × 用户缩放。
+
+    （DPI 那一份由 Tk 的 tk scaling 负责——字号是「点」，Tk 会按 DPI 自己放大。）
+    """
+    return _DENSITY * _USER_SCALE
+
+
+def set_user_scale(value: float) -> float:
+    """用户缩放倍数（等比缩放窗口时用）。"""
+    global _USER_SCALE
+    try:
+        _USER_SCALE = max(0.7, min(2.5, round(float(value), 3)))
+    except Exception:
+        _USER_SCALE = 1.0
+    return _USER_SCALE
+
+
+def user_scale() -> float:
+    return _USER_SCALE
 
 
 def min_density(dpi: float | None = None) -> float:

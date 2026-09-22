@@ -53,3 +53,13 @@ cloud_games:
     honkai_sr:
       enable: false
       token: ''
+captcha:
+  # 签到触发验证码时怎么处理（社区签到与游戏签到共用）
+  # 自动方案：enable=true 且填好 key → 交给打码平台，拿回 validate 后继续签到
+  enable: false
+  type: rrocr          # 支持 rrocr / yescaptcha
+  api: ''              # 打码平台接口地址（留空用该类型默认地址）
+  key: ''              # 你的平台密钥（只留在本地，勿提交）
+  # 人工方案：没配打码平台时，托盘在运行就弹窗让你过（默认 120 秒等待）
+  # 托盘没在监听时完全不走这条路，行为与以前一致
+  manual_wait_sec: 120

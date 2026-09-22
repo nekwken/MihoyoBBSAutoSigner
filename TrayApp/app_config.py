@@ -7,7 +7,7 @@ from pathlib import Path
 
 APP_NAME = "MihoyoBBSAutoSigner"
 APP_TITLE = "米游社自动签到器"
-APP_VERSION = "2.0.0-beta"
+APP_VERSION = "2.0.0"
 
 
 def _exe_or_file_dir() -> Path:
@@ -167,12 +167,18 @@ DEFAULT = {
     "board_hidden": [],
     "account_stuid": "",
     "ui_theme": "system",
+    "ui_scale": 1.0,
     "device_id": "",
     "device_fp": "",
     "last_run": "",
     "last_ok_run": "",
     "last_status": "",
 }
+
+
+def _run_key(value) -> str:
+    """把时间戳规范成可直接比较的 ISO 形式（旧版本写过带空格的形式）。"""
+    return str(value or "").replace(" ", "T")
 
 
 @dataclass
@@ -203,6 +209,7 @@ class TrayConfig:
     board_hidden: list[int] = field(default_factory=list)
     account_stuid: str = ""
     ui_theme: str = "system"
+    ui_scale: float = 1.0
     device_id: str = ""
     device_fp: str = ""
     last_run: str = ""
@@ -221,8 +228,24 @@ class TrayConfig:
         return cls(**{k: v for k, v in data.items() if k in known})
 
     def save(self) -> None:
+        data = asdict(self)
+        # 「上次运行 / 结果」只允许向前更新：设置窗与托盘各持一份 cfg，
+        # 谁后保存谁就会把内存里的旧值写回磁盘 → 重启后误判「今天还没签」而重复补签。
+        try:
+            disk = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+        except Exception:
+            disk = {}
+        if isinstance(disk, dict):
+            disk_run = _run_key(disk.get("last_run"))
+            mem_run = _run_key(data.get("last_run"))
+            if disk_run > mem_run:
+                for key in ("last_run", "last_ok_run", "last_status"):
+                    if key in disk:
+                        data[key] = disk[key]
+            elif not mem_run and disk.get("last_status"):
+                data["last_status"] = disk["last_status"]
         CONFIG_PATH.write_text(
-            json.dumps(asdict(self), ensure_ascii=False, indent=2),
+            json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 

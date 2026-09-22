@@ -44,7 +44,10 @@ def get_account_list(game_id: str, headers: dict, update: bool = False) -> list:
         return get_account_list(game_id, headers, update=True)
 
     if data["retcode"] != 0:
-        log.warning(f"获取「{game_name}」账号列表失败！")
+        log.warning(
+            f"获取「{game_name}」账号列表失败！retcode={data.get('retcode')} "
+            f"message={data.get('message')!r}"
+        )
         return []
 
     account_list = []

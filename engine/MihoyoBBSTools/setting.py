@@ -41,7 +41,7 @@ game_id2config = {
     "bh3_cn": "honkai3rd",
     "nxx_cn": "tears_of_themis",
     "hk4e_cn": "genshin",
-    "hkrpg_cn": "honkaisr",
+    "hkrpg_cn": "honkai_sr",
     "nap_cn": "zzz",
     "abc_cn": "hna",
 }

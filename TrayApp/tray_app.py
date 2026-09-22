@@ -47,6 +47,7 @@ class TrayApp:
             on_request_quit=self._menu_quit,
             status_text=self._status,
             master=self.root,
+            is_running=lambda: self._busy,
         )
 
         self.icon = pystray.Icon(
@@ -86,6 +87,17 @@ class TrayApp:
             self.icon.title = self._title()
         except Exception:
             pass
+        try:
+            self.settings.set_status(text)      # 设置窗状态行 / 签到横幅同步
+        except Exception:
+            pass
+
+    def _set_running(self, running: bool) -> None:
+        """把「正在签到」同步到设置窗横幅（后台线程可调用）。"""
+        try:
+            self.settings.set_running(running)
+        except Exception:
+            pass
 
     def _notify(self, ok: bool, msg: str) -> None:
         try:
@@ -98,6 +110,7 @@ class TrayApp:
             self._set_status("签到进行中…")
             return
         self._busy = True  # 先占位再开线程：避免定时器/菜单连点触发并发重复签到
+        self._set_running(True)
 
         def worker() -> None:
             self._set_status("签到中…")
@@ -111,6 +124,7 @@ class TrayApp:
                 self._notify(False, f"异常：{e}")
             finally:
                 self._busy = False
+                self._set_running(False)
 
         threading.Thread(target=worker, daemon=True, name="mihoyo-checkin").start()
 
@@ -129,6 +143,7 @@ class TrayApp:
             self._set_status("签到进行中…")
             return False
         self._busy = True
+        self._set_running(True)
         self._set_status("签到中…")
         try:
             ok, msg = run_checkin(self.cfg)
@@ -138,10 +153,20 @@ class TrayApp:
             self._set_status(f"异常：{e}")
         finally:
             self._busy = False
+            self._set_running(False)
         return True
 
     def _on_saved(self, cfg: TrayConfig) -> None:
         self.cfg = cfg
+        # 设置窗自己那一份 cfg 可能带着旧的运行状态；调度器直接用 self.cfg 判断
+        # 「今天是否已签」，所以这里以磁盘为准刷新一次，避免重启就补签
+        try:
+            fresh = TrayConfig.load()
+            cfg.last_run = fresh.last_run
+            cfg.last_ok_run = fresh.last_ok_run
+            cfg.last_status = fresh.last_status
+        except Exception:
+            pass
         self._set_status("设置已保存")
 
     def _menu_autostart(self, icon=None, item=None) -> None:
@@ -202,6 +227,7 @@ class TrayApp:
                         on_request_quit=self._menu_quit,
                         status_text=self._status,
                         master=self.root,
+                        is_running=lambda: self._busy,
                     )
                     self.settings.show_now()
                 except Exception as e2:

@@ -527,10 +527,6 @@ def acquire_cloud_token(game: str, stoken: str, mid: str, stuid: str) -> tuple[b
     return True, combo
 
 
-def acquire_cloud_genshin_token(stoken: str, mid: str, stuid: str) -> tuple[bool, str]:
-    return acquire_cloud_token("genshin", stoken, mid, stuid)
-
-
 # ---- 账号身份（uid / 米游社昵称）----
 
 _BBS_USER_FULL_INFO = "https://bbs-api.miyoushe.com/user/api/getUserFullInfo"
