@@ -59,6 +59,8 @@ def main() -> None:
         "dpi.py",
         "theme.py",
         "widgets.py",
+        "captcha_bridge.py",
+        "gt3_solver.py",
         "requirements.txt",
         "build.ps1",
     ]:
