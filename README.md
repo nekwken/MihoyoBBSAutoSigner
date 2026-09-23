@@ -17,14 +17,16 @@
 ## 界面
 
 <p align="center">
-  <img src="docs/assets/ui-settings.png" width="366" alt="功能页（浅色）" />
-  <img src="docs/assets/ui-settings-dark.png" width="366" alt="功能页（深色）" />
+  <a href="docs/assets/ui-settings.png"><img src="docs/assets/ui-settings.png" width="366" alt="功能页（浅色）" /></a>
+  <a href="docs/assets/ui-settings-dark.png"><img src="docs/assets/ui-settings-dark.png" width="366" alt="功能页（深色）" /></a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/ui-account.png" width="366" alt="账号页（浅色）" />
-  <img src="docs/assets/ui-account-dark.png" width="366" alt="账号页（深色）" />
+  <a href="docs/assets/ui-account.png"><img src="docs/assets/ui-account.png" width="366" alt="账号页（浅色）" /></a>
+  <a href="docs/assets/ui-account-dark.png"><img src="docs/assets/ui-account-dark.png" width="366" alt="账号页（深色）" /></a>
 </p>
+
+（点图可看原尺寸）
 
 ## 功能
 
