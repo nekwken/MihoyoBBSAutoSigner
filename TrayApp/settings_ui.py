@@ -119,8 +119,6 @@ MihoyoBBSAutoSigner {APP_VERSION}
 签到引擎：Womsxd/MihoyoBBSTools
 接口与错误码参考社区公开整理
 
-图形验证仅弹窗由用户完成，不会自动绕过极验。
-
 开源仓库：github.com/nekwken/MihoyoBBSAutoSigner
 许可证：MIT
 

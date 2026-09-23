@@ -122,10 +122,10 @@ class Mihoyobbs:
                     if challenge is not None:
                         header["x-rpc-challenge"] = challenge
                     else:
-                        # 本工程按约定不自动过验证码（captcha.bbs_captcha 恒返回 None），
-                        # 所以这里没必要继续：原来每个板块都重试 2 次、每次还调一遍
-                        # get_pass_challenge()（内部 2 个请求）—— 4 个板块就是 ~16 个
-                        # 无用请求，只会加重风控。改为只提示一次并停止后续板块。
+                        # captcha.bbs_captcha 恒返回 None，这里没必要继续：原来每个板块都
+                        # 重试 2 次、每次还调一遍 get_pass_challenge()（内部 2 个请求）——
+                        # 4 个板块就是 ~16 个无用请求，只会加重风控。改为只提示一次并停止
+                        # 后续板块。
                         log.warning(
                             "社区签到触发验证码，本次社区签到未完成（游戏签到不受影响）。"
                             "请在米游社 App 里手动完成一次社区签到，或过一会儿再运行一次。")

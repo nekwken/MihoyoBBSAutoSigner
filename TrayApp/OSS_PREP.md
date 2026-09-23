@@ -23,7 +23,6 @@
 ## 建议补充
 
 - [ ] `CONTRIBUTING.md`（可选）
-- [ ] `SECURITY.md`：不处理“绕过验证码/风控”类 issue
 - [ ] Issue 模板：禁止粘贴账号凭证
 - [ ] CI：`python -m compileall TrayApp` + 可选 ruff
 - [ ] Release 说明：仅分发源码或自建 exe；注明非官方
@@ -41,6 +40,5 @@ python -c "from TrayApp.app_config import DEFAULT; print(DEFAULT['device_id'], D
 ## 合规红线（写入 README）
 
 1. 仅限用户自有账号
-2. 不自动化极验/风控
-3. 不鼓励多开、刷号、商业滥用
-4. 接口变更导致失效属预期，不提供对抗服务端风控的指导
+2. 不鼓励多开、刷号、商业滥用
+3. 接口变更导致失效属预期
