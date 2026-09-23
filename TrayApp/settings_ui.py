@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import queue
 import threading
@@ -3062,7 +3062,7 @@ class SettingsWindow:
             import ctypes
             from ctypes import wintypes
 
-            user32 = ctypes.windll.user32
+            user32 = ctypes.WinDLL("user32")     # 独立实例，别动全局 argtypes
             user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
             user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
             user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
@@ -3108,8 +3108,13 @@ class SettingsWindow:
 
             from PIL import Image, ImageFilter
 
-            user32 = ctypes.windll.user32
-            gdi32 = ctypes.windll.gdi32
+            # 用**独立的 WinDLL 实例**：argtypes 是挂在函数对象上的全局状态，
+            # 而 `ctypes.windll.user32` 是共享缓存的 —— 在这里给 GetWindowRect /
+            # GetClientRect 设 argtypes，会让 dpi.py 用自己 _RECT 结构调同一批函数时
+            # 抛 ArgumentError（被它的 except 吞掉 → 跨屏判定永远 False → 边界抖动
+            # 反复重排）。独立实例互不影响。
+            user32 = ctypes.WinDLL("user32")
+            gdi32 = ctypes.WinDLL("gdi32")
             user32.GetDC.restype = wintypes.HDC
             user32.GetDC.argtypes = [wintypes.HWND]
             user32.ReleaseDC.restype = ctypes.c_int

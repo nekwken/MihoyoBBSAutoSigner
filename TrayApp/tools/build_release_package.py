@@ -11,8 +11,10 @@ PUB = ROOT / "publish" / "MihoyoBBSAutoSigner"
 TRAY = ROOT / "TrayApp"
 PY = r"C:\Users\nekwken\AppData\Local\Programs\Python\Python313\python.exe"
 DIST = PUB / "dist"
-# 构建产物放到仓库外：内置运行时含第三方库，留在仓库树里既臃肿又会被安全扫描误报
-OUT = ROOT / "out"
+# 构建产物放到**项目目录之外**：内置运行时里是第三方库（urllib3/pip 等），
+# 留在仓库树或工作区里既臃肿，又会被安全钩子扫成高危（urllib3 的 PoolManager
+# 会被判成 SSRF，属误报）而拦住后续 git commit。放到 E:\mihoyo-local\ 下最干净。
+OUT = Path(r"E:\mihoyo-local\out")
 STAGE = OUT / "MihoyoBBSAutoSigner"
 ZIP_PATH = OUT / "MihoyoBBSAutoSigner-win64.zip"
 

@@ -64,12 +64,24 @@ def window_dpi(tk_root) -> int:
     if sys.platform != "win32":
         return 0
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32()
         hwnd = user32.GetParent(tk_root.winfo_id()) or tk_root.winfo_id()
         return int(user32.GetDpiForWindow(hwnd) or 0)
     except Exception:
         return 0
 
+
+
+def _user32():
+    """拿一个**独立的** user32 实例。
+
+    `argtypes` 挂在函数对象上、`ctypes.windll.user32` 又是共享缓存的 —— 别的模块
+    （settings_ui 的截图代码）给 GetWindowRect/GetClientRect 设过 argtypes 后，
+    本模块用自己 `_RECT` 结构的调用会直接抛 ArgumentError，被下面的 except 静默吞掉：
+    表现为「跨屏判定永远 False」→ 窗口压在两块屏边界上时反复重排。
+    独立实例互不影响。
+    """
+    return ctypes.WinDLL("user32")
 
 class _RECT(ctypes.Structure):
     _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
@@ -106,7 +118,7 @@ def _straddles_monitors(hwnd, nearest_dpi: int) -> bool:
     否则窗口会比屏幕还大却一直不调整。
     """
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32()
         win = _RECT()
         if not user32.GetWindowRect(hwnd, ctypes.byref(win)):
             return False
@@ -134,7 +146,7 @@ def monitor_dpi(tk_root) -> tuple[int, bool]:
     if sys.platform != "win32":
         return 0, False
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32()
         hwnd = user32.GetAncestor(tk_root.winfo_id(), 2) or tk_root.winfo_id()  # GA_ROOT
         hmon = user32.MonitorFromWindow(hwnd, 2)  # MONITOR_DEFAULTTONEAREST
         if not hmon:
@@ -153,7 +165,7 @@ def monitor_work_area(tk_root) -> tuple[int, int]:
     if sys.platform != "win32":
         return 0, 0
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32()
         hwnd = user32.GetAncestor(tk_root.winfo_id(), 2) or tk_root.winfo_id()
         hmon = user32.MonitorFromWindow(hwnd, 2)
         if not hmon:
@@ -244,7 +256,7 @@ def window_frame_height(tk_root) -> int:
     if sys.platform != "win32":
         return 0
     try:
-        user32 = ctypes.windll.user32
+        user32 = _user32()
         hwnd = user32.GetAncestor(tk_root.winfo_id(), 2) or tk_root.winfo_id()
         win = _RECT()
         client = _RECT()

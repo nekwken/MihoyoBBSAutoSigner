@@ -81,6 +81,13 @@ def ensure_device(cfg) -> tuple[str, str]:
     if not did:
         did = generate_device_id()
         _log(f"生成独立 device_id={did}")
+        # 先落盘再取 fp：启动时托盘的 ensure_device 与设置窗的后台线程会并发调用，
+        # 不先存的话两边各生成一个 id（日志里成对出现、还多一次 getFp 请求）。
+        cfg.device_id = did
+        try:
+            cfg.save()
+        except Exception:
+            pass
     if not fp:
         fp = register_device_fp(did)
         _log(f"获取/生成 device_fp={fp}")
